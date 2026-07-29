@@ -1,0 +1,74 @@
+# ===== Go =====
+# Binaries for programs and plugins
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+
+# Test binary, built with `go test -c`
+*.test
+
+# Code coverage profiles and other test artifacts
+*.out
+coverage.*
+*.coverprofile
+profile.cov
+
+# Dependency directories (uncomment if needed)
+# vendor/
+
+# Go workspace file
+go.work
+go.work.sum
+
+# ===== Environment =====
+.env
+.env.*
+!.env.example
+
+# ===== Editor / IDE =====
+# JetBrains (GoLand)
+.idea/
+
+# VS Code (keep shared settings, ignore user-specific)
+.vscode/*
+!.vscode/settings.json
+!.vscode/extensions.json
+!.vscode/launch.json
+
+# ===== OS generated =====
+.DS_Store
+.DS_Store?
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+$RECYCLE.BIN/
+*.lnk
+
+# ===== Build output =====
+/dist/
+/build/
+/bin/
+/out/
+
+# ===== Logs =====
+*.log
+logs/
+
+# ===== Temporary =====
+*.tmp
+*.temp
+*.swp
+*.swo
+*~
+
+# ===== Agent logs =====
+0*
+*agent_log.md
+*.md
+# ===== Local worktrees =====
+.worktrees/
+
+# ===== Visual brainstorming previews =====
+.superpowers/
