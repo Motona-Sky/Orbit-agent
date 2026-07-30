@@ -2,6 +2,7 @@ package utils
 
 import (
 	"looporbit/internal/config"
+	"os"
 	"path/filepath"
 	"runtime"
 )
@@ -29,7 +30,7 @@ func init() {
 	ChatHistoryFolder = CreateConfigPath["ChatHistoryFolder"]
 	providerConfig, err := config.LoadDefaultProviderConfig()
 	if err != nil {
-		panic(err)
+		os.Remove(ConfigFolderPath)
 	}
 	ApiKey = providerConfig.ApiKey
 	BaseUrl = providerConfig.BaseURL

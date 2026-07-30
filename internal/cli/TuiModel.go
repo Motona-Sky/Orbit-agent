@@ -136,10 +136,12 @@ func (m ConfigModelModel) View() string {
 	if m.loading {
 		copy.Subtitle = m.messages.LoadingMessage
 	}
+	options, visibleCursor, sequenceOffset := m.visibleOptions(width, height)
 	return style.RenderOrbitalMenuView(style.OrbitalMenuView{
 		Copy:           copy,
-		Options:        m.optionLabels(),
-		Cursor:         m.cursor,
+		Options:        options,
+		Cursor:         visibleCursor,
+		SequenceOffset: sequenceOffset,
 		StyleConfig:    m.styleConfig,
 		ViewportWidth:  width,
 		ViewportHeight: height,
@@ -170,6 +172,18 @@ func (m ConfigModelModel) optionLabels() []string {
 		}
 	}
 	return labels
+}
+
+func (m ConfigModelModel) visibleOptions(width, height int) ([]string, int, int) {
+	allLabels := m.optionLabels()
+	if len(allLabels) == 0 {
+		return allLabels, -1, 0
+	}
+	capacity := style.OrbitalMenuOptionCapacity(m.messages.Title, width, height, m.styleConfig)
+	limit := minInt(len(allLabels), capacity)
+	start := clampInt(m.cursor-limit/2, 0, maxInt(0, len(allLabels)-limit))
+	end := minInt(len(allLabels), start+limit)
+	return allLabels[start:end], m.cursor - start, start
 }
 
 func (m *ConfigModelModel) moveCursor(offset int) {

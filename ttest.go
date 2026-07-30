@@ -6,6 +6,9 @@ import (
 )
 
 func main() {
-	fmt.Println(mem.GetUserMemorysPrompt())
-	mem.DelUserMemorys(7)
+	for {
+		mem.DelUserMemorys(1)
+		fmt.Print(mem.GetUserMemorysPrompt())
+	}
+
 }

@@ -140,7 +140,7 @@ func RunAgent(agentvalue RunAgentValue, ui *agentui.AgentUI) error {
 			}
 			// 保存记忆
 			if err := memorys.SaveChatHistory(jsonMemory, SessionId); err != nil {
-				return err
+				memorys.CreateSessionFolder()
 			}
 			return ui.DisplayResult(assistantMemory[0].Content)
 		}
