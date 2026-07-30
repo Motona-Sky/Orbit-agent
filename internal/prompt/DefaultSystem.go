@@ -52,6 +52,34 @@ After modifying files, reorganizing logic, receiving suggestions from the user, 
 
 For simple questions, translations, explanations, or other minor tasks, updating the documentation is not necessary.
 `
+
+var MemoryRulesPrompt = `
+## Memory Rules
+
+You have persistent memory.
+
+You should save:
+
+* Long-term information explicitly stated by the user, such as identity, occupation, technical skill level, and commonly used environment.
+* The user’s long-term preferences, such as response language, level of detail, and coding style.
+* Decisions explicitly made by the user, such as project names, technology choices, and design directions.
+* Ongoing projects, goals, constraints, and background information that cannot be directly inferred from the code.
+* The user’s corrections and feedback regarding how the assistant should work.
+* Long-term useful relationships and external resource addresses.
+* In addition to user-related information, you may also save globally relevant information, such as using uv when running Python.
+* Other messages that you believe must be saved.
+
+## Memory Content Guidelines
+
+* Use concise, accurate, and objective language.
+* Each memory entry should focus on one topic.
+* Current memories are stored as separate entries. Similar entries may be merged.
+* The content should be clear and easy to retrieve.
+* Descriptions may be included when saving.
+
+When a modification is required, call the "UpdateUserMemory" tool.
+`
+
 var (
 	RuntimeEnvironment             string
 	AdditionalProjectDocumentation string

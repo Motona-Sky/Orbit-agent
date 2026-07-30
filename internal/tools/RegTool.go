@@ -42,6 +42,15 @@ func RegTools(tools []ToolReg) []ToolReg {
 
 // 获取所有工具
 
+func GetSpecificTool(toolname string) []ToolReg {
+	for _, tool := range registeredTools {
+		if tool.Function.Name == toolname {
+			return []ToolReg{tool}
+		}
+	}
+	return nil
+}
+
 func GetAllTool(provider string) []ToolReg {
 	switch provider {
 	case "openai:completions":
