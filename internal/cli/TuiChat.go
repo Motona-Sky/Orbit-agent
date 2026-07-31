@@ -61,6 +61,7 @@ type model struct {
 	activeAgentInput         string
 	slashMenuCursor          int
 	slashMenuDismissed       bool
+	wantsRestart             bool
 }
 
 const (

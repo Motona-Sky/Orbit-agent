@@ -13,6 +13,8 @@ import (
 const (
 	modelSetupCommand    = "/model"
 	providerSetupCommand = "/provider"
+	newCommand           = "/new"
+	clearCommand         = "/clear"
 )
 
 type setupScreenReadyMsg struct{}
@@ -48,6 +50,8 @@ func (m model) handleSlashMessageSubmit(value string) (model, tea.Cmd) {
 		return m.startProviderSetup()
 	case effortSetupCommand:
 		return m.startEffortSetup()
+	case newCommand, clearCommand:
+		return m.startNewConversation()
 	default:
 		return m, nil
 	}
@@ -203,4 +207,19 @@ func sequenceTeaCommands(first, second tea.Cmd) tea.Cmd {
 		return first
 	}
 	return tea.Sequence(first, second)
+}
+
+// startNewConversation 设置重启标志并退出 TUI，由外层循环重新启动。
+func (m model) startNewConversation() (model, tea.Cmd) {
+	if m.running {
+		m.closeAgentUI()
+		m.running = false
+		m.stopRunningStatus()
+	}
+	if m.agentUI != nil {
+		m.agentUI.Close()
+		m.agentUI = nil
+	}
+	m.wantsRestart = true
+	return m, tea.Quit
 }

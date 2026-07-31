@@ -60,6 +60,8 @@ var englishLanguage = Language{
 			ProviderCommandDescription: "Configure model providers",
 			EffortCommandDescription:   "Adjust reasoning effort for future requests",
 			SkillsCommandDescription:   "List or invoke an available skill",
+			NewCommandDescription:      "Start a new conversation",
+			ClearCommandDescription:    "Start a new conversation",
 			SkillsEmpty:                "No skills are available",
 			SkillsTaskRequired:         "Provide a task after the skill name",
 			SkillNotFound:              "Skill not found: %s",

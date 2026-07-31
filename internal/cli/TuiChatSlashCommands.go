@@ -16,6 +16,8 @@ const (
 	slashCommandProvider
 	slashCommandEffort
 	slashCommandSkills
+	slashCommandNew
+	slashCommandClear
 )
 
 type slashCommand struct {
@@ -31,6 +33,8 @@ func (m model) slashCommands() []slashCommand {
 		{Name: providerSetupCommand, Description: m.messages.Chat.ProviderCommandDescription, ID: slashCommandProvider},
 		{Name: effortSetupCommand, Description: m.messages.Chat.EffortCommandDescription, ID: slashCommandEffort},
 		{Name: skillsCommand, Description: m.messages.Chat.SkillsCommandDescription, ID: slashCommandSkills},
+		{Name: newCommand, Description: m.messages.Chat.NewCommandDescription, ID: slashCommandNew},
+		{Name: clearCommand, Description: m.messages.Chat.ClearCommandDescription, ID: slashCommandClear},
 	}
 }
 

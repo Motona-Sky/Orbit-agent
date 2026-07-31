@@ -144,7 +144,7 @@ func RunAgent(agentvalue RunAgentValue, ui *agentui.AgentUI) error {
 			}
 			return ui.DisplayResult(assistantMemory[0].Content)
 		}
-		ui.DisplayThinking(assistantMemory[0].Content)
+		ui.DisplayResult(assistantMemory[0].Content)
 		// 显示工具调用
 		for _, toolCall := range toolCalls {
 			target := toolActivityFromCall(toolCall)

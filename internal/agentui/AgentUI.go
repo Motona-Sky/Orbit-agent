@@ -8,9 +8,8 @@ import (
 )
 
 var (
-	ErrClosed                 = errors.New("agent ui is closed")
-	ErrResultAlreadyDisplayed = errors.New("agent result was already displayed")
-	ErrInvalidQuestion        = errors.New("question requires at least two non-empty options")
+	ErrClosed          = errors.New("agent ui is closed")
+	ErrInvalidQuestion = errors.New("question requires at least two non-empty options")
 )
 
 type Event interface {
@@ -105,9 +104,6 @@ type AgentUI struct {
 
 	closeOnce sync.Once
 	closed    atomic.Bool
-
-	resultMu        sync.Mutex
-	resultDisplayed bool
 }
 
 func New() *AgentUI {
@@ -145,16 +141,8 @@ func (ui *AgentUI) Close() {
 	})
 }
 
-// DisplayResult 将本轮 Agent 的最终回答发送给 TUI，每轮只允许调用一次。
+// DisplayResult 将本轮 Agent 的回答发送给 TUI，可多次调用。
 func (ui *AgentUI) DisplayResult(text string) error {
-	ui.resultMu.Lock()
-	if ui.resultDisplayed {
-		ui.resultMu.Unlock()
-		return ErrResultAlreadyDisplayed
-	}
-	ui.resultDisplayed = true
-	ui.resultMu.Unlock()
-
 	return ui.send(ResultEvent{Text: text})
 }
 
