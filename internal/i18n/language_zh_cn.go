@@ -60,6 +60,8 @@ var simplifiedChineseLanguage = Language{
 			ProviderCommandDescription: "配置模型提供商",
 			EffortCommandDescription:   "调整后续请求的思考强度",
 			SkillsCommandDescription:   "列出或调用可用 Skill",
+			NewCommandDescription:      "新建对话",
+			ClearCommandDescription:    "新建对话",
 			SkillsEmpty:                "未发现可用 Skill",
 			SkillsTaskRequired:         "请在 Skill 名称后提供任务",
 			SkillNotFound:              "未找到 Skill：%s",

@@ -79,6 +79,8 @@ type ChatMessages struct {
 	ProviderCommandDescription string
 	EffortCommandDescription   string
 	SkillsCommandDescription   string
+	NewCommandDescription      string
+	ClearCommandDescription    string
 	SkillsEmpty                string
 	SkillsTaskRequired         string
 	SkillNotFound              string

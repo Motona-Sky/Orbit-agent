@@ -83,8 +83,12 @@ func OpenSessionTui(language string, sessions []memorys.SessionSummary, skipped 
 
 func OpenChatTuiForSession(language string, session memorys.SessionSummary) error {
 	p := newChatProgram(NewModelForSession(language, session))
-	if _, err := p.Run(); err != nil {
+	finalModel, err := p.Run()
+	if err != nil {
 		return fmt.Errorf("run restored chat tui: %w", err)
+	}
+	if m, ok := finalModel.(model); ok && m.wantsRestart {
+		return runChatLoop()
 	}
 	return nil
 }
@@ -102,11 +106,23 @@ func OpenChatTui() error {
 		return CreateConfig() //配置文件入口函数 config file entry function
 	}
 
-	p := newChatProgram(NewModelFromConfig())
-	if _, err := p.Run(); err != nil {
-		return fmt.Errorf("run chat tui: %w", err)
+	return runChatLoop()
+}
+
+// runChatLoop 运行主聊天 TUI，当用户执行 /new 或 /clear 时自动重启新会话。
+func runChatLoop() error {
+	for {
+		p := newChatProgram(NewModelFromConfig())
+		finalModel, err := p.Run()
+		if err != nil {
+			return fmt.Errorf("run chat tui: %w", err)
+		}
+		m, ok := finalModel.(model)
+		if !ok || !m.wantsRestart {
+			return nil
+		}
+		// wantsRestart == true，循环重新创建 TUI
 	}
-	return nil
 }
 
 // newChatProgram 使用普通终端屏幕启动主聊天，并允许测试注入输入输出选项。

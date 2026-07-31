@@ -42,13 +42,22 @@ func RegTools(tools []ToolReg) []ToolReg {
 
 // 获取所有工具
 
-func GetSpecificTool(toolname string) []ToolReg {
+func SpecificTool(toolname string) ToolReg {
 	for _, tool := range registeredTools {
 		if tool.Function.Name == toolname {
-			return []ToolReg{tool}
+			return tool
 		}
 	}
-	return nil
+	return ToolReg{}
+}
+
+func GetSpecificTool(toolname []string) []ToolReg {
+	var tools []ToolReg
+	for _, toolname := range toolname {
+		tool := SpecificTool(toolname)
+		tools = append(tools, tool)
+	}
+	return tools
 }
 
 func GetAllTool(provider string) []ToolReg {
