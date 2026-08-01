@@ -2,13 +2,10 @@ package main
 
 import (
 	"fmt"
-	mem "looporbit/internal/memorys"
+	"looporbit/internal/mcp"
 )
 
 func main() {
-	for {
-		mem.DelUserMemorys(1)
-		fmt.Print(mem.GetUserMemorysPrompt())
-	}
+	fmt.Println(mcp.LoadMcpconfig())
 
 }

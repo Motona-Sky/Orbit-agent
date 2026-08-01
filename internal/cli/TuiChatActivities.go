@@ -62,7 +62,10 @@ func (m model) renderRuntimeActivityTree(width int) string {
 	if !m.running || width <= 0 {
 		return ""
 	}
-	parent := lipgloss.NewStyle().Inline(true).MaxWidth(width).Render(m.renderRunningStatus())
+	parent := ""
+	if m.terminalTranscriptCursor == 0 || m.terminalTranscriptCursor > len(m.transcript) || m.transcript[m.terminalTranscriptCursor-1].role != "assistant" {
+		parent = lipgloss.NewStyle().Inline(true).MaxWidth(width).Render(m.renderRunningStatus())
+	}
 	childWidth := maxInt(1, width-lipgloss.Width(activityTreeBranch))
 	children := make([]string, 0, len(m.activities)+2)
 	if thinking := m.renderThinkingText(childWidth); thinking != "" {
@@ -76,7 +79,9 @@ func (m model) renderRuntimeActivityTree(width int) string {
 	}
 
 	lines := make([]string, 0, len(children)+1)
-	lines = append(lines, parent)
+	if parent != "" {
+		lines = append(lines, parent)
+	}
 	for index, child := range children {
 		prefix := activityTreeBranch
 		if index == len(children)-1 {

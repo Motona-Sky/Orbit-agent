@@ -989,6 +989,8 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m.handleAgentUIEvent(msg.event)
 	case agentui.ResultEvent:
 		return m.handleAgentUIEvent(msg)
+	case agentui.FinalResultEvent:
+		return m.handleAgentUIEvent(msg)
 	case agentui.ThinkingEvent:
 		return m.handleAgentUIEvent(msg)
 	case agentui.ActivityEvent:
