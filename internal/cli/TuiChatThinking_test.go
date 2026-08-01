@@ -69,13 +69,71 @@ func TestThinkingTextSurvivesNonTerminalEvents(t *testing.T) {
 	}
 }
 
+func TestResultEventDisplaysWithoutEndingTurn(t *testing.T) {
+	m := NewModelForLanguage("zh-CN")
+	m.running = true
+	m.agentUI = agentui.New()
+	defer m.agentUI.Close()
+	m.thinkingText = "正在调用工具"
+	m.recordActivity(agentui.ActivityEvent{Kind: agentui.ActivityTool, Target: "检查配置"})
+
+	updated, cmd := m.handleAgentUIEvent(agentui.ResultEvent{Text: "先检查配置。"})
+	m = updated.(model)
+
+	if !m.running || m.agentUI == nil {
+		t.Fatal("non-final result ended the running turn")
+	}
+	if m.thinkingText != "正在调用工具" {
+		t.Fatalf("non-final result cleared thinking text %q", m.thinkingText)
+	}
+	if len(m.transcript) != 2 || m.transcript[1].content != "先检查配置。" {
+		t.Fatalf("transcript = %#v", m.transcript)
+	}
+	status := ansi.Strip(m.renderInlineStatus(100))
+	if strings.Contains(status, "LOOPORBIT") {
+		t.Fatalf("status redisplayed LoopOrbit after DisplayResult: %q", status)
+	}
+	if !strings.Contains(status, "正在调用工具") {
+		t.Fatalf("status lost thinking text after DisplayResult: %q", status)
+	}
+	if cmd == nil {
+		t.Fatal("non-final result did not wait for the next agent UI event")
+	}
+}
+
+func TestFinalResultEventEndsTurnAfterMultipleResults(t *testing.T) {
+	m := NewModelForLanguage("zh-CN")
+	m.running = true
+	m.agentUI = agentui.New()
+	m.thinkingText = "正在收尾"
+
+	updated, _ := m.handleAgentUIEvent(agentui.ResultEvent{Text: "第一段"})
+	m = updated.(model)
+	updated, _ = m.handleAgentUIEvent(agentui.ResultEvent{Text: "第二段"})
+	m = updated.(model)
+	updated, _ = m.handleAgentUIEvent(agentui.FinalResultEvent{Text: "最终回答"})
+	m = updated.(model)
+
+	if m.running || m.agentUI != nil || m.thinkingText != "" {
+		t.Fatalf("final state = running %v, ui nil %v, thinking %q", m.running, m.agentUI == nil, m.thinkingText)
+	}
+	if len(m.transcript) != 3 {
+		t.Fatalf("transcript length = %d, want 3", len(m.transcript))
+	}
+	for index, want := range []string{"第一段", "第二段", "最终回答"} {
+		if m.transcript[index].content != want {
+			t.Fatalf("transcript[%d] = %q, want %q", index, m.transcript[index].content, want)
+		}
+	}
+}
+
 func TestThinkingTextClearsOnEveryTerminalPath(t *testing.T) {
 	tests := []struct {
 		name string
 		stop func(model) model
 	}{
 		{name: "result", stop: func(m model) model {
-			updated, _ := m.handleAgentUIEvent(agentui.ResultEvent{Text: "done"})
+			updated, _ := m.handleAgentUIEvent(agentui.FinalResultEvent{Text: "done"})
 			return updated.(model)
 		}},
 		{name: "error", stop: func(m model) model {

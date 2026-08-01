@@ -38,10 +38,10 @@ type TaskItem struct {
 }
 
 type UsageStats struct {
-	TodayTokens    int64
-	CacheHitRate   float64
-	ContextUsed    float64
-	ContextTotal   float64
+	TodayTokens  int64
+	CacheHitRate float64
+	ContextUsed  float64
+	ContextTotal float64
 }
 
 type ResultEvent struct {
@@ -49,6 +49,12 @@ type ResultEvent struct {
 }
 
 func (ResultEvent) agentUIEvent() {}
+
+type FinalResultEvent struct {
+	Text string
+}
+
+func (FinalResultEvent) agentUIEvent() {}
 
 type ThinkingEvent struct {
 	Text string
@@ -141,9 +147,14 @@ func (ui *AgentUI) Close() {
 	})
 }
 
-// DisplayResult 将本轮 Agent 的回答发送给 TUI，可多次调用。
+// DisplayResult 将本轮 Agent 的中间回答发送给 TUI，可多次调用且不结束本轮。
 func (ui *AgentUI) DisplayResult(text string) error {
 	return ui.send(ResultEvent{Text: text})
+}
+
+// DisplayFinalResult 将本轮 Agent 的最终回答发送给 TUI，并结束本轮。
+func (ui *AgentUI) DisplayFinalResult(text string) error {
+	return ui.send(FinalResultEvent{Text: text})
 }
 
 // Ask 在 TUI 中显示内联选择卡，并阻塞到用户确认选项或本轮被关闭。

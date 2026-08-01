@@ -5,6 +5,46 @@ import (
 	"testing"
 )
 
+func TestDisplayResultAndFinalResultPublishDistinctEvents(t *testing.T) {
+	ui := New()
+
+	if err := ui.DisplayResult("first"); err != nil {
+		t.Fatal(err)
+	}
+	if err := ui.DisplayResult("second"); err != nil {
+		t.Fatal(err)
+	}
+	if err := ui.DisplayFinalResult("done"); err != nil {
+		t.Fatal(err)
+	}
+
+	for index, want := range []struct {
+		text  string
+		final bool
+	}{
+		{text: "first"},
+		{text: "second"},
+		{text: "done", final: true},
+	} {
+		event, err := ui.Next()
+		if err != nil {
+			t.Fatal(err)
+		}
+		switch got := event.(type) {
+		case ResultEvent:
+			if want.final || got.Text != want.text {
+				t.Fatalf("event %d = %#v, want result %q final=%v", index, got, want.text, want.final)
+			}
+		case FinalResultEvent:
+			if !want.final || got.Text != want.text {
+				t.Fatalf("event %d = %#v, want result %q final=%v", index, got, want.text, want.final)
+			}
+		default:
+			t.Fatalf("event %d type = %T", index, event)
+		}
+	}
+}
+
 func TestDisplayUsagePublishesStatsEvent(t *testing.T) {
 	ui := New()
 	want := UsageStats{

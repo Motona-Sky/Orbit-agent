@@ -48,7 +48,7 @@ func finishAgentRun(ui *agentui.AgentUI, errorLabel string, runErr error) agentR
 	if runErr == nil {
 		return finished
 	}
-	if displayErr := ui.DisplayResult(errorLabel + runErr.Error()); displayErr != nil {
+	if displayErr := ui.DisplayFinalResult(errorLabel + runErr.Error()); displayErr != nil {
 		finished.err = errors.Join(runErr, displayErr)
 	}
 	return finished
@@ -57,6 +57,17 @@ func finishAgentRun(ui *agentui.AgentUI, errorLabel string, runErr error) agentR
 func (m model) handleAgentUIEvent(msg agentui.Event) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case agentui.ResultEvent:
+		m.clearPendingUserTranscript()
+		m.appendActivitySummary()
+		m.transcript = append(m.transcript, chatTranscriptEntry{
+			kind:    transcriptMessage,
+			role:    "assistant",
+			content: msg.Text,
+		})
+		m, transcriptCmd := m.commitTerminalTranscript(nil)
+		return m, sequenceTeaCommands(transcriptCmd, m.waitForNextAgentUIEvent())
+
+	case agentui.FinalResultEvent:
 		failed := strings.HasPrefix(strings.TrimSpace(msg.Text), m.messages.Chat.AgentErrorLabel)
 		m.clearPendingUserTranscript()
 		m.appendActivitySummary()

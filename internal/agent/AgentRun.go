@@ -142,9 +142,13 @@ func RunAgent(agentvalue RunAgentValue, ui *agentui.AgentUI) error {
 			if err := memorys.SaveChatHistory(jsonMemory, SessionId); err != nil {
 				memorys.CreateSessionFolder()
 			}
-			return ui.DisplayResult(assistantMemory[0].Content)
+			return ui.DisplayFinalResult(assistantMemory[0].Content)
 		}
-		ui.DisplayResult(assistantMemory[0].Content)
+		if content := strings.TrimSpace(assistantMemory[0].Content); content != "" {
+			if err := ui.DisplayResult(assistantMemory[0].Content); err != nil {
+				return err
+			}
+		}
 		// 显示工具调用
 		for _, toolCall := range toolCalls {
 			target := toolActivityFromCall(toolCall)
