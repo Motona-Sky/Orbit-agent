@@ -24,22 +24,42 @@ var (
 	OS                string
 )
 
-func init() {
+func GInit() {
+
 	CreateConfigPath, _ := config.GetConfigFolderPath()
-	ConfigFolderPath = CreateConfigPath["ConfigFolder"]
-	ChatHistoryFolder = CreateConfigPath["ChatHistoryFolder"]
-	providerConfig, err := config.LoadDefaultProviderConfig()
-	if err != nil {
-		os.Remove(ConfigFolderPath)
+	// 检查配置目录是否已经初始化（此前错误地用未赋值的全局变量 ConfigFolderPath 即空串去 stat，
+	// 导致永远进入 else 分支，ChatHistoryFolder 保持为空，会话被写入到当前工作目录）。
+	_, err := os.Stat(CreateConfigPath["ConfigFolder"])
+	if err == nil {
+
+		ConfigFolderPath = CreateConfigPath["ConfigFolder"]
+		ChatHistoryFolder = CreateConfigPath["ChatHistoryFolder"]
+		providerConfig, err := config.LoadDefaultProviderConfig()
+		if err != nil {
+			os.Remove(ConfigFolderPath)
+		}
+		ApiKey = providerConfig.ApiKey
+		BaseUrl = providerConfig.BaseURL
+		Model = providerConfig.Model
+		Provider = providerConfig.Type
+		mustReloadThinkLevelConfig()
+		config.Cwd = Cwd
+		ProejctConfigPath = filepath.Join(Cwd, ".looporbit")
+		config.ProejctConfigPath = ProejctConfigPath
+		UserPath, _ = config.GetUserHomePath()
+		OS = runtime.GOOS
+	} else {
 	}
-	ApiKey = providerConfig.ApiKey
-	BaseUrl = providerConfig.BaseURL
-	Model = providerConfig.Model
-	Provider = providerConfig.Type
-	mustReloadThinkLevelConfig()
-	config.Cwd = Cwd
-	ProejctConfigPath = filepath.Join(Cwd, ".looporbit")
-	config.ProejctConfigPath = ProejctConfigPath
-	UserPath, _ = config.GetUserHomePath()
-	OS = runtime.GOOS
+}
+func init() {
+	configpath, err := config.GetConfigFolderPath()
+	if err != nil {
+		panic(err)
+	}
+	Path := configpath["ConfigFolder"]
+	_, err = os.Stat(Path)
+	if err == nil {
+		GInit()
+	}
+
 }

@@ -1088,5 +1088,6 @@ func (m model) Init() tea.Cmd {
 	if err != nil {
 		config.CreateProjectConfig()
 	}
+	utils.GInit()
 	return nil
 }
