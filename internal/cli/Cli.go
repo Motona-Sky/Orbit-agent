@@ -7,7 +7,6 @@ import (
 
 	"looporbit/internal/config"
 	"looporbit/internal/memorys"
-	"looporbit/internal/utils"
 )
 
 type runDependencies struct {
@@ -80,7 +79,14 @@ func defaultSessionFlowDependencies() sessionFlowDependencies {
 			return appConfig.Language, err
 		},
 		listSessions: func() ([]memorys.SessionSummary, int, error) {
-			return memorys.ListSessions(utils.ChatHistoryFolder)
+			// 直接从 config 包取会话目录路径，避免依赖 utils.ChatHistoryFolder 全局变量
+			// —— 该全局变量只在 TUI Init() 里通过 utils.GInit() 初始化，
+			// 而 -s 流程在列出会话时尚未进入 TUI，全局变量仍为空串会导致扫描当前工作目录。
+			paths, err := config.GetConfigFolderPath()
+			if err != nil {
+				return nil, 0, err
+			}
+			return memorys.ListSessions(paths["ChatHistoryFolder"])
 		},
 		selectSession: OpenSessionTui,
 		openChat:      OpenChatTuiForSession,

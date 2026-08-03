@@ -58,22 +58,19 @@ func newOrbitalStyles(styleConfig config.StyleConfig) orbitalStyles {
 	foreground := lipgloss.Color(styleConfig.Palette.Foreground)
 	muted := lipgloss.Color(styleConfig.Palette.Muted)
 	divider := lipgloss.Color(styleConfig.Palette.Divider)
-	background := lipgloss.Color(styleConfig.Palette.Background)
-	panelFill := lipgloss.Color(styleConfig.Palette.PanelFill)
-	optionFill := lipgloss.Color(styleConfig.Palette.OptionFill)
 	return orbitalStyles{
-		page:        lipgloss.NewStyle().Foreground(foreground).Background(background),
+		page:        lipgloss.NewStyle().Foreground(foreground),
 		logoLoop:    lipgloss.NewStyle().Foreground(foreground).Bold(true),
 		logoAccent:  lipgloss.NewStyle().Foreground(accent).Bold(true),
 		logoWord:    lipgloss.NewStyle().Foreground(accent).Bold(true),
 		logoMeta:    lipgloss.NewStyle().Foreground(muted),
-		panelLine:   lipgloss.NewStyle().Background(panelFill),
+		panelLine:   lipgloss.NewStyle(),
 		panelBorder: lipgloss.NewStyle().Foreground(accent),
 		heading:     lipgloss.NewStyle().Foreground(accent).Bold(true),
 		subtitle:    lipgloss.NewStyle().Foreground(muted),
 		divider:     lipgloss.NewStyle().Foreground(divider),
 		option:      lipgloss.NewStyle().Foreground(foreground),
-		active:      lipgloss.NewStyle().Foreground(accent).Background(optionFill).Bold(true),
+		active:      lipgloss.NewStyle().Foreground(accent).Bold(true),
 		hintKey:     lipgloss.NewStyle().Foreground(accent).Bold(true),
 		hintAction:  lipgloss.NewStyle().Foreground(muted).Bold(true),
 		layout:      styleConfig.Layout,

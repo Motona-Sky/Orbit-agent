@@ -69,12 +69,18 @@ func TestConfiguredOrbitalMenuUsesPalette(t *testing.T) {
 		colorSequence(styleConfig.Palette.Foreground),
 		colorSequence(styleConfig.Palette.Muted),
 		colorSequence(styleConfig.Palette.Divider),
+	} {
+		if !strings.Contains(got, color) {
+			t.Fatalf("configured menu output does not contain %q", color)
+		}
+	}
+	for _, color := range []string{
 		backgroundSequence(styleConfig.Palette.Background),
 		backgroundSequence(styleConfig.Palette.PanelFill),
 		backgroundSequence(styleConfig.Palette.OptionFill),
 	} {
-		if !strings.Contains(got, color) {
-			t.Fatalf("configured menu output does not contain %q", color)
+		if strings.Contains(got, color) {
+			t.Fatalf("configured menu output unexpectedly contains background %q", color)
 		}
 	}
 	assertNoDefaultAccent(t, got)
