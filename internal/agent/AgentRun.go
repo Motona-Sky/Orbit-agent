@@ -22,7 +22,6 @@ type RunAgentValue struct {
 	ApiKey        string
 	BaseUrl       string
 	Model         string
-	Mcp           string
 	SystemPt      string
 	ThinkLevel    string
 	UserInput     string
@@ -89,6 +88,7 @@ func RunAgent(agentvalue RunAgentValue, ui *agentui.AgentUI) error {
 	//主循环
 	for {
 		AgentiterNum++
+		// GetAllTool 内部按 mcpEnabled/disabledTools 自动过滤，agent 层不感知开关。
 		allTools := tools.GetAllTool(agentvalue.Provider)
 		inputMemory, data, err := llm.GenReqJsonPv(req, allTools)
 		if err != nil {

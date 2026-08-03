@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"looporbit/internal/tools"
 	"looporbit/internal/utils"
 	"net/http"
 	"os"
@@ -293,14 +294,18 @@ func RunMcp(ctx context.Context) ([]*McpClient, error) {
 // === MCP 工具注册表 ============================================================
 //
 // McpToolRegistry 保存所有已注册的 MCP 工具，key 是暴露给模型的工具名。
-// SelectAndCallMcp 和 SplitMcpToolCalls 都依赖此表来识别 MCP 工具。
-// 由 RegisterMcpTools 在 Agent 启动时填充。
+// SelectAndCallMcp 依赖此表把模型调用转发回对应的 MCP server。
+// 同时 RegisterMcpTools 会把每个工具登记到 tools.RegMcpToolFuncs 和 tools 的 schema
+// 注册表，让 MCP 工具与本地工具在 agent 主循环里走同一条 RunTools 路径，
+// 不再需要 SplitMcpToolCalls 之类的分流逻辑。
 
 // McpToolEntry 描述一个暴露给模型的 MCP 工具：由哪个 client 处理、原始工具名是什么。
 type McpToolEntry struct {
-	Client   *McpClient // 拥有该工具的 MCP client session
-	Server   string     // 所属 MCP server 名称（用于日志/前缀）
-	ToolName string     // MCP server 上的原始工具名（转发 CallTool 时使用）
+	Client      *McpClient // 拥有该工具的 MCP client session
+	Server      string     // 所属 MCP server 名称（用于日志/前缀）
+	ToolName    string     // MCP server 上的原始工具名（转发 CallTool 时使用）
+	Description string     // 工具描述，原样回填给模型
+	InputSchema any        // 原始 JSON Schema，原样回填给模型的 parameters 字段
 }
 
 var McpToolRegistry = map[string]McpToolEntry{}
@@ -311,29 +316,66 @@ func ExposedToolName(server, tool string) string {
 	return "mcp__" + server + "__" + tool
 }
 
-// RegisterMcpTools 把一个 MCP server 暴露的全部工具登记到 McpToolRegistry。
-// 返回所有暴露给模型的工具名，便于上层合并到 tools 列表传给模型。
+// RegisterMcpTools 把一个 MCP server 暴露的全部工具同时登记到三处：
+//  1. McpToolRegistry：SelectAndCallMcp 据此把模型调用转发回 server
+//  2. tools.RegMcpToolFuncs：让 agent 主循环的 RunTools 能像本地工具一样执行 MCP 工具
+//  3. tools.RegMcpTool：让 GetAllTool 能把 MCP 工具的 schema 合并发给模型
+//
+// 三处注册保持同名（exposed name），避免执行层和声明层错位。
+// 返回所有暴露给模型的工具名，便于上层做日志/调试。
 func RegisterMcpTools(serverName string, client *McpClient, mcpTools []*mcpsdk.Tool) []string {
 	names := make([]string, 0, len(mcpTools))
 	for _, t := range mcpTools {
 		exposed := ExposedToolName(serverName, t.Name)
 		McpToolRegistry[exposed] = McpToolEntry{
-			Client:   client,
-			Server:   serverName,
-			ToolName: t.Name,
+			Client:      client,
+			Server:      serverName,
+			ToolName:    t.Name,
+			Description: t.Description,
+			InputSchema: t.InputSchema,
 		}
+
+		// 闭包捕获 exposed，避免循环变量别名问题。
+		// ToolFunc.Function 签名是 func([]any) (string, error)，没有 ctx 参数；
+		// 这里用 context.Background() 让 MCP 调用走 SDK 默认的会话级多路复用。
+		// 若未来需要按 agent 调用级超时/取消控制，需要扩展 ToolFunc 签名。
+		exposedName := exposed
+		tools.RegMcpToolFuncs[exposed] = tools.ToolFunc{
+			Name: exposed,
+			Function: func(args []any) (string, error) {
+				_, result, err := SelectAndCallMcp(context.Background(), exposedName, mcpArgsToJSON(args))
+				return result, err
+			},
+		}
+		tools.RegMcpTool(tools.ToolReg{
+			Type: "function",
+			Function: tools.ToolFunction{
+				Name:        exposed,
+				Description: t.Description,
+				Parameters:  t.InputSchema, // 原样塞，OpenAI/Anthropic 都吃 JSON Schema
+			},
+		})
 		names = append(names, exposed)
 	}
 	return names
 }
 
-// IsMcpTool 判断暴露给模型的工具名是否属于已注册的 MCP 工具。
-func IsMcpTool(exposedName string) bool {
-	_, ok := McpToolRegistry[exposedName]
-	return ok
+// mcpArgsToJSON 把 ToolFunc 收到的 []any 还原为 arguments JSON 字符串。
+// RunTools 调用 Function 时传入 []any{function}，其中 function["arguments"] 是模型返回的 JSON 字符串。
+// 与 CallGrepFunc/CallReadFIleFunc 等本地工具的解析约定一致。
+func mcpArgsToJSON(args []any) string {
+	if len(args) == 0 {
+		return ""
+	}
+	function, ok := args[0].(map[string]any)
+	if !ok {
+		return ""
+	}
+	arguments, _ := function["arguments"].(string)
+	return arguments
 }
 
-// === 函数 1：选择 MCP 服务器并发起调用 =========================================
+// === 选择 MCP 服务器并发起调用 ================================================
 //
 // SelectAndCallMcp 根据暴露给模型的工具名，从注册表中找到对应的 MCP server，
 // 解析模型返回的 arguments JSON 字符串，转发给 MCP server 的 CallTool。
@@ -389,62 +431,4 @@ func mcpResultToString(res *mcpsdk.CallToolResult) string {
 		return "MCP tool error: " + sb.String()
 	}
 	return sb.String()
-}
-
-// === 函数 2：从模型返回的 tool_calls 中分离 MCP 调用 =============================
-//
-// SplitMcpToolCalls 把模型返回的 tool_calls 切分为 MCP 调用与本地调用两组。
-// 每条记录都保留在原 tool_calls 中的下标 Index，便于调用方在并行执行后按原顺序合并结果。
-//
-// 输入格式参考 ParseResponse：[]any，每个元素形如
-//
-//	map[id:"call_xxx" function:map[arguments:"{\"k\":\"v\"}" name:"mcp__time__now"] type:"function"]
-//
-// 返回：
-//   - mcpCalls:   所有属于 MCP 工具的调用（保留原下标）
-//   - localCalls: 所有不属于 MCP 工具的调用（保留原下标，原样传给 tools.RunTools）
-//   - err:        解析失败
-func SplitMcpToolCalls(toolCalls []any) (mcpCalls []McpToolCall, localCalls []LocalToolCall, err error) {
-	for i, value := range toolCalls {
-		toolCall, ok := value.(map[string]any)
-		if !ok {
-			return nil, nil, fmt.Errorf("tool_call[%d] is not map[string]any", i)
-		}
-		id, _ := toolCall["id"].(string)
-		function, ok := toolCall["function"].(map[string]any)
-		if !ok {
-			return nil, nil, fmt.Errorf("tool_call[%d] missing function", i)
-		}
-		name, _ := function["name"].(string)
-		arguments, _ := function["arguments"].(string)
-
-		if IsMcpTool(name) {
-			mcpCalls = append(mcpCalls, McpToolCall{
-				Index:         i,
-				ToolCallID:    id,
-				ExposedName:   name,
-				ArgumentsJSON: arguments,
-			})
-		} else {
-			localCalls = append(localCalls, LocalToolCall{
-				Index: i,
-				Raw:   toolCall,
-			})
-		}
-	}
-	return mcpCalls, localCalls, nil
-}
-
-// McpToolCall 表示一个属于 MCP 的工具调用，保留原下标以便按顺序合并结果。
-type McpToolCall struct {
-	Index         int    // 在模型原始 tool_calls 数组中的下标
-	ToolCallID    string // 模型返回的 id（如 call_xxx），用于回填 tool 角色消息
-	ExposedName   string // 暴露给模型的工具名（mcp__server__tool）
-	ArgumentsJSON string // 模型返回的 arguments（JSON 字符串）
-}
-
-// LocalToolCall 表示属于本地工具链的调用，原样传给 tools.RunTools。
-type LocalToolCall struct {
-	Index int
-	Raw   map[string]any
 }

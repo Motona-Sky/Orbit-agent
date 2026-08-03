@@ -35,11 +35,3 @@ func runAgentValueForEvent(chatmessages TuiEvent) agent.RunAgentValue {
 		ResumeSession: chatmessages.ResumeSession,
 	}
 }
-
-// Provider   string
-// ApiKey     string
-// BaseUrl    string
-// Model      string
-// Mcp        string
-// SystemPt   string
-// ThinkLevel string
