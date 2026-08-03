@@ -6,7 +6,12 @@ import (
 	"looporbit/internal/utils"
 )
 
+// RunTools 并发执行模型返回的 tool_calls。
+// 内部通过 GetEnabledTools() 拿到当前可执行的工具集合（按 mcpEnabled / disabledTools 过滤），
+// agent 主循环无需传开关参数 —— MCP 开关和工具禁用全部封装在 tools 包内。
 func RunTools(toolsValue []any) ([]ToolResult, error) {
+	enabled := GetEnabledTools()
+
 	type toolJob struct {
 		index      int
 		tool       ToolFunc
@@ -33,8 +38,8 @@ func RunTools(toolsValue []any) ([]ToolResult, error) {
 		if !ok || name == "" {
 			return nil, errors.New("tool name is invalid")
 		}
-		//查看注册的工具
-		tool, ok := RegToolFuncs[name]
+		//只在 enabled 集合中查找：本地工具 + （可选）MCP 工具统一查这张表
+		tool, ok := enabled[name]
 		if !ok {
 			return nil, fmt.Errorf("tool %q is not registered", name)
 		}
