@@ -43,6 +43,17 @@ func TestOpenAICompatibleTypeMatchesAdapter(t *testing.T) {
 	}
 }
 
+func TestProviderTypeOptionsIncludeOpenAIResponses(t *testing.T) {
+	m := initialConfigProviderForLanguageWithConfig("en", config.AppConfig{})
+	option, ok := providerTypeOptionForType(m.typeOptions, "openai:responses")
+	if !ok {
+		t.Fatal("openai:responses provider type is missing")
+	}
+	if option.Label != "openai-responses" {
+		t.Fatalf("OpenAI Responses label = %q", option.Label)
+	}
+}
+
 func TestProviderSelectionUsesConfiguredStyle(t *testing.T) {
 	path := filepath.Join(t.TempDir(), config.StyleConfigFileName)
 	t.Setenv(config.StyleConfigPathEnv, path)

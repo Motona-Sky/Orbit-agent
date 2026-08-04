@@ -10,6 +10,14 @@ type ToolReg struct {
 	Function ToolFunction `json:"function"`
 }
 
+// OpenaiResponseTool OpenAI 响应的工具结构体
+type OpenaiResponseTool struct {
+	Type        string         `json:"type"`
+	Name        string         `json:"name"`
+	Description string         `json:"description"`
+	Parameters  ToolParameters `json:"parameters"`
+}
+
 type ToolFunction struct {
 	Name        string `json:"name"`
 	Description string `json:"description"`
@@ -217,13 +225,25 @@ func GetAllTool(provider string) []ToolReg {
 			}
 		}
 		return result
-	case "openai:responses":
-		return nil
 	case "anthropic:messages":
 		return nil
+	case "openai:responses":
+		for _, t := range registeredTools {
+			if toolAllowed(t.Function.Name, disabledTools) {
+				result = append(result, t)
+			}
+		}
+		if mcpEnabled {
+			for _, t := range registeredMcpTools {
+				if toolAllowed(t.Function.Name, disabledTools) {
+					result = append(result, t)
+				}
+			}
+		}
 	default:
 		return nil
 	}
+	return result
 }
 
 // GetEnabledTools 返回当前可执行的工具集合，供 RunTools 内部查找。
