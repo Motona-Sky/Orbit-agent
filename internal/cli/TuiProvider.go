@@ -64,6 +64,7 @@ type providerTypeOption struct {
 
 const (
 	providerTypeOpenAICompatible  = "openai:completions"
+	providerTypeOpenAIResponses   = "openai:responses"
 	providerTypeAnthropicMessages = "anthropic:messages"
 )
 
@@ -118,6 +119,7 @@ func initialConfigProviderForLanguageWithConfig(languageCode string, appConfig c
 func providerTypeOptions(messages i18n.ProviderSetupMessages) []providerTypeOption {
 	return []providerTypeOption{
 		{Label: messages.OpenAITypeOption, Type: providerTypeOpenAICompatible},
+		{Label: messages.OpenAIResponseTypeOption, Type: providerTypeOpenAIResponses},
 		{Label: messages.AnthropicTypeOption, Type: providerTypeAnthropicMessages},
 	}
 }

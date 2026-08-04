@@ -9,9 +9,16 @@ import (
 	"strings"
 )
 
-func GetConLength(usage map[string]any) float64 {
-	conlen := usage["prompt_tokens"].(float64)
-	return conlen
+func GetConLength(provider string, usage map[string]any) float64 {
+	switch provider {
+	case "openai:completions":
+		conlen := usage["prompt_tokens"].(float64)
+		return conlen
+	case "openai:response", "openai:responses":
+		conlen := usage["input_tokens"].(float64)
+		return conlen
+	}
+	return 0
 }
 func CompressContext(context []llm.MemoryMessage) ([]llm.MemoryMessage, error) {
 	var newContext []llm.MemoryMessage
@@ -91,7 +98,7 @@ Submit the summary as role: assistant. The original input remains role: user.
 	if err != nil {
 		return "", err
 	}
-	_, assistantMemory, _, err := ParseResponse(respJSON)
+	_, assistantMemory, _, err := ParseResponse(utils.Provider, respJSON)
 	if err != nil {
 		return "", err
 	}

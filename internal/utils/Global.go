@@ -53,10 +53,10 @@ func GInit() {
 }
 func init() {
 	configpath, err := config.GetConfigFolderPath()
+	Path := filepath.Join(configpath["ConfigFolder"], "Orbitconfig.yaml")
 	if err != nil {
 		panic(err)
 	}
-	Path := configpath["ConfigFolder"]
 	_, err = os.Stat(Path)
 	if err == nil {
 		GInit()

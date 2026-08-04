@@ -72,10 +72,15 @@ func RunAgent(ctx context.Context, agentvalue RunAgentValue, ui *agentui.AgentUI
 
 	// 计算上下文长度
 	contextLength = estimateMemoryTokens(loadedMemory)
-	_ = ui.DisplayUsage(agentui.UsageStats{
+	usageStats := agentui.UsageStats{
 		ContextUsed:  contextLength,
 		ContextTotal: utils.MaxContextLength,
-	})
+	}
+	if dailyUsage, err := billing.QueryTodayUsage(); err == nil {
+		usageStats.TodayTokens = dailyUsage.TotalTokens
+		usageStats.CacheHitRate = dailyUsage.CacheHitRate()
+	}
+	_ = ui.DisplayUsage(usageStats)
 
 	LiftContextLength := contextLength / utils.MaxContextLength
 	if LiftContextLength > 0.7 {
@@ -87,11 +92,13 @@ func RunAgent(ctx context.Context, agentvalue RunAgentValue, ui *agentui.AgentUI
 	}
 	// 压缩上下文
 	//主循环
+	//GetAllTool→GenReqJsonPv→RequestProvider→ParseResponse→PublishDailyUsage→SaveMemory→DisplayResult
 	for {
 		AgentiterNum++
 		// GetAllTool 内部按 mcpEnabled/disabledTools 自动过滤，agent 层不感知开关。
 		allTools := tools.GetAllTool(agentvalue.Provider)
 		inputMemory, data, err := llm.GenReqJsonPv(req, allTools)
+		// ui.DisplayThinking(data)
 		if err != nil {
 			return fmt.Errorf("gen req json pv err: %w", err)
 		}
@@ -116,14 +123,14 @@ func RunAgent(ctx context.Context, agentvalue RunAgentValue, ui *agentui.AgentUI
 			return err
 		}
 		// 解析响应
-		toolCalls, assistantMemory, usage, err := ParseResponse(responseJSON)
+		toolCalls, assistantMemory, usage, err := ParseResponse(req.Provider, responseJSON)
 		if err != nil {
 			return fmt.Errorf("get tool calls json err: %w", err)
 		}
 		// 存储每日token消耗
 		dailyUsage, usageErr := billing.InsertCostData(SessionId, usage)
 		//上下文长度
-		contextLength = GetConLength(usage)
+		contextLength = GetConLength(req.Provider, usage)
 		if err := publishDailyUsage(ui, dailyUsage, usageErr); err != nil {
 			return err
 		}
