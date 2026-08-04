@@ -99,7 +99,11 @@ func ParseSkills(skillsList []SkillsList) map[string][]SkillsList {
 				}
 			}
 		}
+		scanErr := scanner.Err()
 		f.Close()
+		if scanErr != nil {
+			continue
+		}
 		if skill.Skills.Name != "" {
 			skillslist[skill.Skills.RunAs] = append(skillslist[skill.Skills.RunAs], skill)
 		}

@@ -45,7 +45,7 @@ func UpdateFile(path string, old_content string, new_content string) error {
 	if match < 0 {
 		return fmt.Errorf("old_content not found in %s", path)
 	}
-	if strings.Index(text[match+1:], old_content) >= 0 {
+	if strings.Contains(text[match+1:], old_content) {
 		return fmt.Errorf("old_content found multiple times in %s, provide more surrounding context to make it unique", path)
 	}
 
