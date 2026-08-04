@@ -5,7 +5,7 @@ import (
 	"strings"
 	"time"
 
-	"looporbit/internal/agentui"
+	"orbit/internal/agentui"
 
 	tea "github.com/charmbracelet/bubbletea"
 )

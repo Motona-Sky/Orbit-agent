@@ -3,10 +3,10 @@ package cli
 import (
 	"fmt"
 
-	"looporbit/internal/config"
-	"looporbit/internal/i18n"
-	"looporbit/internal/memorys"
-	"looporbit/internal/style"
+	"orbit/internal/config"
+	"orbit/internal/i18n"
+	"orbit/internal/memorys"
+	"orbit/internal/style"
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/x/ansi"

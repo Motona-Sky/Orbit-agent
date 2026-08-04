@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"os"
 
-	"looporbit/internal/cli"
+	"orbit/internal/cli"
 )
 
 func main() {

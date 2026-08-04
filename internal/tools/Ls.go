@@ -1,6 +1,7 @@
 package tools
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -122,7 +123,7 @@ func lsTreeRel(path, prefix string, depth int) ([]string, error) {
 
 	return result, nil
 }
-func CallLsFunc(jsonstr []any) (string, error) {
+func CallLsFunc(_ context.Context, jsonstr []any) (string, error) {
 	if len(jsonstr) == 0 {
 		return "", fmt.Errorf("jsonstr is empty")
 	}

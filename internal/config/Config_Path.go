@@ -1,14 +1,18 @@
-// Package config 提供 LoopOrbit 配置目录路径相关的基础能力。
+// Package config 提供 Orbit 配置目录路径相关的基础能力。
 package config
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
 )
 
-// ConfigFolderName 是 LoopOrbit 在用户主目录下创建的配置文件夹名称。
-const ConfigFolderName = ".looporbit"
+// ConfigFolderName 是 Orbit 在用户主目录下创建的配置文件夹名称。
+const (
+	ConfigFolderName       = ".orbit"
+	LegacyConfigFolderName = ".looporbit"
+)
 
 // 迁移utils.GetSystemVersion
 // GetSystemVersion 返回当前运行系统的简短名称。
@@ -46,7 +50,7 @@ func GetUserHomePath() (string, error) {
 	return homePath, nil
 }
 
-// GetConfigFolderPath 返回 LoopOrbit 配置文件夹的完整路径，但不创建目录。
+// GetConfigFolderPath 返回 Orbit 配置文件夹的完整路径，但不创建目录。
 func GetConfigFolderPath() (map[string]string, error) {
 	var CreateFolder map[string]string
 	homePath, err := GetUserHomePath()
@@ -54,6 +58,12 @@ func GetConfigFolderPath() (map[string]string, error) {
 		return nil, err
 	}
 	ConfigFolder := filepath.Join(homePath, ConfigFolderName)
+	legacyConfigFolder := filepath.Join(homePath, LegacyConfigFolderName)
+	if _, err := os.Stat(ConfigFolder); errors.Is(err, os.ErrNotExist) {
+		if _, legacyErr := os.Stat(legacyConfigFolder); legacyErr == nil {
+			ConfigFolder = legacyConfigFolder
+		}
+	}
 	ChatHistoryFolder := filepath.Join(ConfigFolder, "sessions")
 	CreateFolder = map[string]string{
 		"ConfigFolder":      ConfigFolder,
@@ -62,7 +72,7 @@ func GetConfigFolderPath() (map[string]string, error) {
 	return CreateFolder, nil
 }
 
-// CreateConfigFolder 在用户主目录下创建 LoopOrbit 配置文件夹，并返回目录路径。
+// CreateConfigFolder 在用户主目录下创建 Orbit 配置文件夹，并返回目录路径。
 func CreateConfigFolder() (string, error) {
 	configPath, err := GetConfigFolderPath()
 	if err != nil {

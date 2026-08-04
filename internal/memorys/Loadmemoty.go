@@ -6,8 +6,8 @@ import (
 	"os"
 	"path/filepath"
 
-	"looporbit/internal/llm"
-	"looporbit/internal/utils"
+	"orbit/internal/llm"
+	"orbit/internal/utils"
 )
 
 // LoadMemory 从历史目录读取并解析指定会话，读取或 JSON 解析失败时返回带会话 ID 的错误。

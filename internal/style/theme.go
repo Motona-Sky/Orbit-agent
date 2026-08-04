@@ -1,6 +1,6 @@
 package style
 
-import "looporbit/internal/config"
+import "orbit/internal/config"
 
 func DefaultStyleConfig() config.StyleConfig {
 	styleConfig, _ := ThemeConfigByKey("dark")

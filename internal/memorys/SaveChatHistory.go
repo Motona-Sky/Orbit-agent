@@ -5,7 +5,7 @@ import (
 	"os"
 	"path/filepath"
 
-	"looporbit/internal/utils"
+	"orbit/internal/utils"
 )
 
 // SaveChatHistory 将序列化后的聊天历史以仅当前用户可读写的权限保存到指定会话文件。

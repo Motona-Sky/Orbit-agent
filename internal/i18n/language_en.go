@@ -6,7 +6,7 @@ var englishLanguage = Language{
 	Name: "English",
 	Messages: Messages{
 		Chat: ChatMessages{
-			BrandName:                  "LoopOrbit",
+			BrandName:                  "Orbit",
 			AgentWorkspace:             "agent workspace",
 			FooterHelp:                 "tab focus | shift+tab back | enter submit | Ctrl+C quit",
 			CompactFooterHelp:          "Ctrl+C cancel/quit · Shift+Enter newline",
@@ -24,7 +24,7 @@ var englishLanguage = Language{
 			AgentChatTitle:             "Agent chat",
 			YouLabel:                   "You",
 			SampleUserMessage:          "Build a Claude Code inspired terminal interface.",
-			AssistantLabel:             "LoopOrbit",
+			AssistantLabel:             "Orbit",
 			SampleAssistantMessage:     "I will keep this as a pure TUI shell and leave real features unbound.",
 			ComposerTitle:              "Input",
 			MessageAgent:               "Message agent",
@@ -73,7 +73,7 @@ var englishLanguage = Language{
 			TurnCanceled:  "■ Current task canceled",
 		},
 		LanguageSetup: LanguageSetupMessages{
-			Title:        "LoopOrbit",
+			Title:        "Orbit",
 			Heading:      "Language Setup",
 			Subtitle:     "Choose your preferred language to continue",
 			MoveShortcut: "↑/↓",
@@ -84,7 +84,7 @@ var englishLanguage = Language{
 			QuitAction:   "quit",
 		},
 		SessionSetup: SessionSetupMessages{
-			Title:         "LoopOrbit",
+			Title:         "Orbit",
 			Heading:       "Resume session",
 			Subtitle:      "Choose a previous conversation to continue",
 			EmptyState:    "No resumable sessions found",
@@ -97,9 +97,9 @@ var englishLanguage = Language{
 			QuitAction:    "quit",
 		},
 		ThemeSetup: ThemeSetupMessages{
-			Title:              "LoopOrbit",
+			Title:              "Orbit",
 			Subtitle:           "Theme setup",
-			Description:        "Choose the interface style for LoopOrbit",
+			Description:        "Choose the interface style for Orbit",
 			DarkOption:         "Orbit Dark",
 			LightOption:        "Solar Light",
 			HighContrastOption: "Signal Contrast",
@@ -112,7 +112,7 @@ var englishLanguage = Language{
 			QuitAction:         "quit",
 		},
 		EffortSetup: EffortSetupMessages{
-			Title:        "LoopOrbit",
+			Title:        "Orbit",
 			Heading:      "Reasoning effort",
 			Subtitle:     "Choose the reasoning effort for future requests",
 			MoveShortcut: "↑/↓",
@@ -123,7 +123,7 @@ var englishLanguage = Language{
 			QuitAction:   "quit",
 		},
 		ModelSetup: ModelSetupMessages{
-			Title:             "LoopOrbit",
+			Title:             "Orbit",
 			Heading:           "Model selection",
 			Subtitle:          "Choose a model available from the current provider",
 			LoadingMessage:    "Loading model list…",
@@ -139,7 +139,7 @@ var englishLanguage = Language{
 			QuitKey:           "Esc",
 			QuitAction:        "back",
 		}, ProviderSetup: ProviderSetupMessages{
-			Title:               "LoopOrbit",
+			Title:               "Orbit",
 			SelectSubtitle:      "Model provider setup",
 			SelectDescription:   "Choose the provider used for model requests",
 			NameSubtitle:        "Provider name",

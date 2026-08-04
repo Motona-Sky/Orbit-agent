@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"strings"
 
-	"looporbit/internal/agentui"
+	"orbit/internal/agentui"
 
 	"github.com/charmbracelet/lipgloss"
 )

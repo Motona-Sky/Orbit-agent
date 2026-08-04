@@ -3,7 +3,7 @@ package agent
 import (
 	"encoding/json"
 	"errors"
-	"looporbit/internal/llm"
+	"orbit/internal/llm"
 )
 
 type ToolResultJson struct {

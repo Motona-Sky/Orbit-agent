@@ -4,8 +4,8 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"looporbit/internal/llm"
-	"looporbit/internal/utils"
+	"orbit/internal/llm"
+	"orbit/internal/utils"
 	"strings"
 )
 

@@ -4,7 +4,7 @@ import (
 	"strings"
 	"testing"
 
-	"looporbit/internal/config"
+	"orbit/internal/config"
 
 	"github.com/charmbracelet/lipgloss"
 	"github.com/charmbracelet/x/ansi"
@@ -54,7 +54,7 @@ func TestConfiguredOrbitalMenuUsesPalette(t *testing.T) {
 	styleConfig := configuredTestStyle()
 	got := RenderOrbitalMenuView(OrbitalMenuView{
 		Copy: OrbitalMenuCopy{
-			Title: "LoopOrbit", Heading: "Theme", Subtitle: "Select",
+			Title: "Orbit", Heading: "Theme", Subtitle: "Select",
 			MoveShortcut: "↑↓", MoveAction: "move",
 			SelectKey: "Enter", SelectAction: "select",
 		},
@@ -90,7 +90,7 @@ func TestConfiguredOrbitalFormUsesPalette(t *testing.T) {
 	enableTrueColor(t)
 	styleConfig := configuredTestStyle()
 	got := RenderOrbitalFormView(OrbitalFormView{
-		Copy:           OrbitalFormCopy{Title: "LoopOrbit", Heading: "Provider", Hint: "Enter"},
+		Copy:           OrbitalFormCopy{Title: "Orbit", Heading: "Provider", Hint: "Enter"},
 		Lines:          []string{"Model", "gpt"},
 		StyleConfig:    styleConfig,
 		ViewportWidth:  80,
@@ -115,7 +115,7 @@ func TestConfiguredOrbitalUsesLayout(t *testing.T) {
 	styleConfig.Layout.MaxPanelWidth = 40
 	styleConfig.Layout.MinWidth = 20
 	got := ansi.Strip(RenderOrbitalMenuView(OrbitalMenuView{
-		Copy:           OrbitalMenuCopy{Title: "LoopOrbit", Heading: "Theme"},
+		Copy:           OrbitalMenuCopy{Title: "Orbit", Heading: "Theme"},
 		Options:        []string{"one"},
 		StyleConfig:    styleConfig,
 		ViewportWidth:  100,

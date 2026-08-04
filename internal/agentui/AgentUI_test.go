@@ -5,6 +5,18 @@ import (
 	"testing"
 )
 
+func TestCloseCancelsAgentContext(t *testing.T) {
+	ui := New()
+	canceled := make(chan struct{})
+	ui.SetCancel(func() { close(canceled) })
+	ui.Close()
+	select {
+	case <-canceled:
+	default:
+		t.Fatal("Close did not cancel agent context")
+	}
+}
+
 func TestDisplayResultAndFinalResultPublishDistinctEvents(t *testing.T) {
 	ui := New()
 

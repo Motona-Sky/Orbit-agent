@@ -9,7 +9,7 @@ import (
 	"strings"
 	"time"
 
-	"looporbit/internal/llm"
+	"orbit/internal/llm"
 )
 
 type SessionSummary struct {

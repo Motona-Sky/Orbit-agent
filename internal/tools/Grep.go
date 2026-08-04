@@ -2,6 +2,7 @@ package tools
 
 import (
 	"bufio"
+	"context"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -129,7 +130,7 @@ func grepTargets(path string) ([]grepTarget, error) {
 	return targets, nil
 }
 
-func CallGrepFunc(jsonstr []any) (string, error) {
+func CallGrepFunc(_ context.Context, jsonstr []any) (string, error) {
 	if len(jsonstr) == 0 {
 		return "", fmt.Errorf("jsonstr is empty")
 	}

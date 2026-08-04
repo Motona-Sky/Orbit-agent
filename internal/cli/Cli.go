@@ -5,8 +5,8 @@ import (
 	"fmt"
 	"os"
 
-	"looporbit/internal/config"
-	"looporbit/internal/memorys"
+	"orbit/internal/config"
+	"orbit/internal/memorys"
 )
 
 type runDependencies struct {
@@ -97,7 +97,7 @@ func defaultSessionFlowDependencies() sessionFlowDependencies {
 func openSessionFlow(deps sessionFlowDependencies) error {
 	language, err := deps.loadConfig()
 	if err != nil {
-		return fmt.Errorf("load app config: %w; run looporbit setup first", err)
+		return fmt.Errorf("load app config: %w; run orbit setup first", err)
 	}
 	sessions, skipped, err := deps.listSessions()
 	if err != nil {

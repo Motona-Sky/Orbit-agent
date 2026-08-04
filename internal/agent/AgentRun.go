@@ -1,16 +1,17 @@
 package agent
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
-	"looporbit/internal/agentui"
-	"looporbit/internal/billing"
-	"looporbit/internal/i18n"
-	"looporbit/internal/llm"
-	"looporbit/internal/memorys"
-	"looporbit/internal/tools"
-	"looporbit/internal/utils"
+	"orbit/internal/agentui"
+	"orbit/internal/billing"
+	"orbit/internal/i18n"
+	"orbit/internal/llm"
+	"orbit/internal/memorys"
+	"orbit/internal/tools"
+	"orbit/internal/utils"
 	"os"
 	"strconv"
 	"strings"
@@ -31,7 +32,7 @@ type RunAgentValue struct {
 var contextLength float64 = 0
 
 // RunAgent 加载会话上下文并执行 Agent 循环，直至产生最终回复或遇到不可恢复的错误。
-func RunAgent(agentvalue RunAgentValue, ui *agentui.AgentUI) error {
+func RunAgent(ctx context.Context, agentvalue RunAgentValue, ui *agentui.AgentUI) error {
 	var memory []llm.MemoryMessage
 	req := llm.GenReqJsonPvRequest{
 		Provider:     agentvalue.Provider,
@@ -156,7 +157,7 @@ func RunAgent(agentvalue RunAgentValue, ui *agentui.AgentUI) error {
 				return err
 			}
 		}
-		toolResults, err := tools.RunTools(toolCalls)
+		toolResults, err := tools.RunTools(ctx, toolCalls)
 		if err != nil {
 			return fmt.Errorf("run tools err: %w", err)
 		}

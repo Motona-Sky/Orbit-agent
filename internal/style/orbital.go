@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"strings"
 
-	"looporbit/internal/config"
+	"orbit/internal/config"
 
 	"github.com/charmbracelet/lipgloss"
 )
@@ -139,7 +139,7 @@ func RenderOrbitalLogo(title string) string {
 }
 
 func renderOrbitalLogo(title string, styles orbitalStyles) string {
-	if title != "LoopOrbit" {
+	if title != "Orbit" {
 		return styles.logoLoop.Render(title)
 	}
 	return renderOrbitalPromptLogo(true, styles)
@@ -157,7 +157,7 @@ func renderOrbitalLogoForViewport(title string, viewportWidth int, styles orbita
 	if viewportWidth <= 0 {
 		return ""
 	}
-	if title != "LoopOrbit" {
+	if title != "Orbit" {
 		return styles.logoLoop.Render(truncateCells(title, viewportWidth))
 	}
 
@@ -169,7 +169,7 @@ func renderOrbitalLogoForViewport(title string, viewportWidth int, styles orbita
 	if lipgloss.Width(compact) <= viewportWidth {
 		return compact
 	}
-	return styles.logoAccent.Render(truncateCells("◉ LOOPORBIT", viewportWidth))
+	return styles.logoAccent.Render(truncateCells("◉ ORBIT", viewportWidth))
 }
 
 func RenderOrbitalMenuPanel(copy OrbitalMenuCopy, options []string, cursor, viewportWidth int) string {
@@ -322,9 +322,7 @@ func renderOrbitalShortcutBar(copy OrbitalMenuCopy, width int, styles orbitalSty
 }
 
 func renderOrbitalPromptLogo(includeAgent bool, styles orbitalStyles) string {
-	logo := styles.logoAccent.Render("◉ ") +
-		styles.logoLoop.Render("LOOP") +
-		styles.logoWord.Render("ORBIT")
+	logo := styles.logoAccent.Render("◉ ORBIT")
 	if includeAgent {
 		logo += styles.logoMeta.Render(" / AGENT")
 	}

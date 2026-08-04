@@ -110,6 +110,8 @@ type AgentUI struct {
 
 	closeOnce sync.Once
 	closed    atomic.Bool
+	cancelMu  sync.Mutex
+	cancel    func()
 }
 
 func New() *AgentUI {
@@ -140,9 +142,24 @@ func (ui *AgentUI) Next() (Event, error) {
 	}
 }
 
+func (ui *AgentUI) SetCancel(cancel func()) {
+	ui.cancelMu.Lock()
+	defer ui.cancelMu.Unlock()
+	if ui.closed.Load() {
+		cancel()
+		return
+	}
+	ui.cancel = cancel
+}
+
 func (ui *AgentUI) Close() {
 	ui.closeOnce.Do(func() {
 		ui.closed.Store(true)
+		ui.cancelMu.Lock()
+		if ui.cancel != nil {
+			ui.cancel()
+		}
+		ui.cancelMu.Unlock()
 		close(ui.done)
 	})
 }

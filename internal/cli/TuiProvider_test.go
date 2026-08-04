@@ -5,8 +5,8 @@ import (
 	"strings"
 	"testing"
 
-	"looporbit/internal/config"
-	"looporbit/internal/style"
+	"orbit/internal/config"
+	"orbit/internal/style"
 
 	"github.com/charmbracelet/lipgloss"
 	"github.com/muesli/termenv"

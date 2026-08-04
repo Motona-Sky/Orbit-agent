@@ -4,7 +4,7 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
-	"looporbit/internal/config"
+	"orbit/internal/config"
 	"path/filepath"
 	"sync"
 	"time"

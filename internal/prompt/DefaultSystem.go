@@ -2,8 +2,8 @@ package prompt
 
 import (
 	"fmt"
-	"looporbit/internal/skills"
-	"looporbit/internal/utils"
+	"orbit/internal/skills"
+	"orbit/internal/utils"
 	"os"
 	"path/filepath"
 	"strings"
@@ -37,7 +37,7 @@ var ProjectReadingandModificationGuide = `
 ## Project Reading and Modification Guide
 The current project's main documentation file is located at:
 
-".looporbit/Orbit.md"
+".orbit/Orbit.md"
 
 After it has been created, the project documentation may be created or updated whenever necessary. Its main contents should include:
 

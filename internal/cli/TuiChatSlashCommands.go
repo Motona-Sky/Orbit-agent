@@ -3,7 +3,7 @@ package cli
 import (
 	"strings"
 
-	"looporbit/internal/skills"
+	"orbit/internal/skills"
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"

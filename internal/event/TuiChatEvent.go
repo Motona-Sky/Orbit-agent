@@ -1,14 +1,15 @@
 package event
 
 import (
-	"looporbit/internal/agent"
-	"looporbit/internal/agentui"
-	"looporbit/internal/prompt"
-	"looporbit/internal/utils"
+	"context"
+	"orbit/internal/agent"
+	"orbit/internal/agentui"
+	"orbit/internal/prompt"
+	"orbit/internal/utils"
 )
 
 // MessagesEvent 确定当前会话 ID，将聊天事件转换为 Agent 参数并执行本轮对话。
-func MessagesEvent(chatmessages TuiEvent, ui *agentui.AgentUI) error {
+func MessagesEvent(ctx context.Context, chatmessages TuiEvent, ui *agentui.AgentUI) error {
 	if chatTuiInit.Pwd == "" {
 		InitChatTuiEvent(chatmessages.Pwd)
 	}
@@ -19,7 +20,7 @@ func MessagesEvent(chatmessages TuiEvent, ui *agentui.AgentUI) error {
 	utils.SessionId = sessionid
 
 	run := runAgentValueForEvent(chatmessages)
-	return agent.RunAgent(run, ui)
+	return agent.RunAgent(ctx, run, ui)
 }
 
 // runAgentValueForEvent 将聊天事件与当前全局模型配置组合为 Agent 执行参数。

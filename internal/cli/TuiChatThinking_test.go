@@ -6,7 +6,7 @@ import (
 	"testing"
 	"time"
 
-	"looporbit/internal/agentui"
+	"orbit/internal/agentui"
 
 	"github.com/charmbracelet/x/ansi"
 )
@@ -90,8 +90,8 @@ func TestResultEventDisplaysWithoutEndingTurn(t *testing.T) {
 		t.Fatalf("transcript = %#v", m.transcript)
 	}
 	status := ansi.Strip(m.renderInlineStatus(100))
-	if strings.Contains(status, "LOOPORBIT") {
-		t.Fatalf("status redisplayed LoopOrbit after DisplayResult: %q", status)
+	if strings.Contains(status, "ORBIT") {
+		t.Fatalf("status redisplayed Orbit after DisplayResult: %q", status)
 	}
 	if !strings.Contains(status, "正在调用工具") {
 		t.Fatalf("status lost thinking text after DisplayResult: %q", status)
@@ -184,7 +184,7 @@ func TestThinkingRendersAsFirstRuntimeChild(t *testing.T) {
 		m.running = true
 		m.thinkingText = "正在检查配置"
 		lines := strings.Split(ansi.Strip(m.renderRuntimeActivityTree(100)), "\n")
-		if len(lines) != 2 || !strings.Contains(lines[0], "LOOPORBIT") ||
+		if len(lines) != 2 || !strings.Contains(lines[0], "ORBIT") ||
 			!strings.HasPrefix(lines[1], "└─  ") || !strings.Contains(lines[1], "正在检查配置") {
 			t.Fatalf("thinking-only tree = %#v", lines)
 		}

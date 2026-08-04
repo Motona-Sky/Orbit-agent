@@ -1,14 +1,14 @@
 package tools_test
 
 import (
-	"looporbit/internal/tools"
+	"orbit/internal/tools"
 	"testing"
 )
 
 // maxTreeDepth limits recursion depth to guard against symlink loops.
 
 // func TestLstree(t *testing.T) {
-// 	paths, err := lsTree("F:\\LoopOrbit-agent", 2)
+// 	paths, err := lsTree(t.TempDir(), 2)
 // 	if err != nil {
 // 		t.Errorf("lsTree failed: %v", err)
 // 	}
@@ -16,7 +16,7 @@ import (
 // }
 
 func TestLs(t *testing.T) {
-	files, err := tools.Ls("F:\\LoopOrbit-agent", true, 2)
+	files, err := tools.Ls(t.TempDir(), true, 2)
 	if err != nil {
 		t.Errorf("Ls failed: %v", err)
 	}

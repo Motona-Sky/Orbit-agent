@@ -5,7 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"looporbit/internal/utils"
+	"orbit/internal/utils"
 	"os/exec"
 	"strings"
 	"time"
@@ -52,7 +52,7 @@ func execCommand(command string, timeout time.Duration) (string, error) {
 
 }
 
-func CallExecCommandFunc(jsonstr []any) (string, error) {
+func CallExecCommandFunc(_ context.Context, jsonstr []any) (string, error) {
 	if len(jsonstr) == 0 {
 		return "", fmt.Errorf("tool calls is empty")
 	}

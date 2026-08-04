@@ -4,7 +4,7 @@ import (
 	"strings"
 	"testing"
 
-	"looporbit/internal/agentui"
+	"orbit/internal/agentui"
 
 	"github.com/charmbracelet/x/ansi"
 )
