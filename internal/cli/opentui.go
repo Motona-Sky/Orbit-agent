@@ -1,7 +1,6 @@
 package cli
 
 import (
-	"context"
 	"errors"
 	"fmt"
 	"orbit/internal/config"
@@ -83,31 +82,24 @@ func OpenSessionTui(language string, sessions []memorys.SessionSummary, skipped 
 	return m.SelectedSession, true, nil
 }
 
-func runWithMcp(run func() error) error {
-	ctx, cancel := context.WithCancel(context.Background())
-	clients, err := mcp.RunMcp(ctx)
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "MCP startup warning: %v\n", err)
-	}
-	defer func() {
-		cancel()
-		for _, client := range clients {
-			_ = client.Close()
-		}
-		mcp.ClearMcpState()
-	}()
-	return run()
+func runWithMcp(run func(*mcp.Manager) error) error {
+	manager := mcp.NewManager()
+	defer manager.Close()
+	return run(manager)
 }
 
 func OpenChatTuiForSession(language string, session memorys.SessionSummary) error {
-	return runWithMcp(func() error {
-		p := newChatProgram(NewModelForSession(language, session))
+	return runWithMcp(func(manager *mcp.Manager) error {
+		initial := NewModelForSession(language, session)
+		initial.mcpManager = manager
+		initial.refreshMcpStatus()
+		p := newChatProgram(initial)
 		finalModel, err := p.Run()
 		if err != nil {
 			return fmt.Errorf("run restored chat tui: %w", err)
 		}
 		if m, ok := finalModel.(model); ok && m.wantsRestart {
-			return runChatLoopWithoutMcp()
+			return runChatLoopWithoutMcp(manager)
 		}
 		return nil
 	})
@@ -134,9 +126,9 @@ func runChatLoop() error {
 }
 
 // runChatLoopWithoutMcp 运行主聊天 TUI，当用户执行 /new 或 /clear 时自动重启新会话。
-func runChatLoopWithoutMcp() error {
+func runChatLoopWithoutMcp(manager *mcp.Manager) error {
 	for {
-		p := newChatProgram(NewModelFromConfig())
+		p := newChatProgram(newModelFromConfigWithMcp(manager))
 		finalModel, err := p.Run()
 		if err != nil {
 			return fmt.Errorf("run chat tui: %w", err)

@@ -13,6 +13,7 @@ import (
 	"orbit/internal/event"
 	"orbit/internal/i18n"
 	"orbit/internal/llm"
+	"orbit/internal/mcp"
 	"orbit/internal/memorys"
 	"orbit/internal/style"
 	"orbit/internal/utils"
@@ -56,6 +57,10 @@ type model struct {
 	modelSetupRequestID      uint64
 	providerSetup            *ConfigProviderModel
 	effortSetup              *ConfigEffortModel
+	mcpPage                  *mcpPageState
+	mcpManager               *mcp.Manager
+	mcpStatuses              []mcp.ServiceStatus
+	mcpStartupError          string
 	setupScreenReady         bool
 	pendingInput             string
 	activeAgentInput         string
@@ -117,6 +122,13 @@ func NewModelForLanguage(languageCode string) model {
 	return initialModel(languageCode)
 }
 
+func newModelForLanguageWithMcp(languageCode string, manager *mcp.Manager) model {
+	m := initialModel(languageCode)
+	m.mcpManager = manager
+	m.refreshMcpStatus()
+	return m
+}
+
 func NewModelForSession(languageCode string, session memorys.SessionSummary) model {
 	m := initialModel(languageCode)
 	m.sessionID = session.ID
@@ -163,11 +175,15 @@ func transcriptFromMemory(messages []llm.MemoryMessage) []chatTranscriptEntry {
 
 // NewModelFromConfig 按 YAML 配置中的语言初始化主 TUI，读取失败时回退默认英文。
 func NewModelFromConfig() model {
+	return newModelFromConfigWithMcp(nil)
+}
+
+func newModelFromConfigWithMcp(manager *mcp.Manager) model {
 	appConfig, err := config.LoadAppConfig()
 	if err != nil {
-		return NewModel()
+		return newModelForLanguageWithMcp(i18n.DefaultLanguage, manager)
 	}
-	return NewModelForLanguage(appConfig.Language)
+	return newModelForLanguageWithMcp(appConfig.Language, manager)
 }
 
 // initialModel 设置默认焦点和输入框占位文案。
@@ -589,6 +605,12 @@ func (m model) View() string {
 		}
 		return m.effortSetup.View()
 	}
+	if m.mcpPage != nil {
+		if !m.setupScreenReady {
+			return ""
+		}
+		return m.renderMcpPage()
+	}
 	width := terminalContentWidth(m.width)
 	if width == 0 {
 		return ""
@@ -711,6 +733,9 @@ func (m model) workPromptLines() []string {
 			formatTokenCount(int64(m.usageStats.ContextUsed)),
 			formatTokenCount(int64(m.usageStats.ContextTotal)),
 		)),
+	}
+	if summary := m.mcpErrorSummary(); summary != "" {
+		lines = append(lines, m.accentStyle().Render(summary))
 	}
 	if len(m.tasks) == 0 {
 		return lines
@@ -966,7 +991,18 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.setupScreenReady = true
 		return m, nil
 	}
-	if (m.modelSetup != nil || m.providerSetup != nil || m.effortSetup != nil) && !m.setupScreenReady {
+	if started, ok := msg.(mcpStartedMsg); ok {
+		if started.err != nil {
+			m.mcpStartupError = started.err.Error()
+		}
+		m.refreshMcpStatus()
+		return m, waitForMcpChange(m.mcpManager)
+	}
+	if _, ok := msg.(mcpChangedMsg); ok && m.mcpPage == nil {
+		m.refreshMcpStatus()
+		return m, waitForMcpChange(m.mcpManager)
+	}
+	if (m.modelSetup != nil || m.providerSetup != nil || m.effortSetup != nil || m.mcpPage != nil) && !m.setupScreenReady {
 		if _, ok := msg.(tea.KeyMsg); ok {
 			return m, nil
 		}
@@ -979,6 +1015,9 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	}
 	if m.effortSetup != nil {
 		return m.updateEffortSetup(msg)
+	}
+	if m.mcpPage != nil {
+		return m.updateMcpPage(msg)
 	}
 
 	switch msg := msg.(type) {
@@ -1089,5 +1128,5 @@ func (m model) Init() tea.Cmd {
 		config.CreateProjectConfig()
 	}
 	utils.GInit()
-	return nil
+	return startMcpManager(m.mcpManager)
 }
