@@ -50,6 +50,8 @@ func (m model) handleSlashMessageSubmit(value string) (model, tea.Cmd) {
 		return m.startProviderSetup()
 	case effortSetupCommand:
 		return m.startEffortSetup()
+	case mcpCommand:
+		return m.startMcpPage()
 	case newCommand, clearCommand:
 		return m.startNewConversation()
 	default:

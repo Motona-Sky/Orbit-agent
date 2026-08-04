@@ -1,6 +1,9 @@
 package tools
 
-import "context"
+import (
+	"context"
+	"sync"
+)
 
 type ToolReg struct {
 	Type     string       `json:"type"`
@@ -40,25 +43,57 @@ var RegToolFuncs = make(map[string]ToolFunc)
 
 // RegMcpToolFuncs 存储 MCP 工具的执行函数，由 mcp.RegisterMcpTools 填充。
 // 与本地池分开存放，便于 GetEnabledTools 按 McpEnabled 开关整体纳入或排除。
-var RegMcpToolFuncs = make(map[string]ToolFunc)
-
-var registeredTools []ToolReg
-
-// registeredMcpTools 存储 MCP 工具的 schema 描述，供 GetAllTool 合并后发给模型。
-var registeredMcpTools []ToolReg
+var (
+	RegMcpToolFuncs    = make(map[string]ToolFunc)
+	registeredTools    []ToolReg
+	registeredMcpTools []ToolReg
+	toolRegistryMu     sync.RWMutex
+)
 
 func RegTools(tools []ToolReg) []ToolReg {
+	toolRegistryMu.Lock()
+	defer toolRegistryMu.Unlock()
 	registeredTools = append(registeredTools, tools...)
-	return registeredTools
+	return append([]ToolReg(nil), registeredTools...)
 }
 
-func RegMcpTools(tools []ToolReg) {
-	registeredMcpTools = append(registeredMcpTools, tools...)
+func RegMcpTools(newTools []ToolReg) {
+	toolRegistryMu.Lock()
+	defer toolRegistryMu.Unlock()
+	registeredMcpTools = append(registeredMcpTools, newTools...)
+}
+
+func RegisterMcpToolSet(functions map[string]ToolFunc, schemas []ToolReg) {
+	toolRegistryMu.Lock()
+	defer toolRegistryMu.Unlock()
+	for name, function := range functions {
+		RegMcpToolFuncs[name] = function
+	}
+	registeredMcpTools = append(registeredMcpTools, schemas...)
+}
+
+func RemoveMcpTools(names []string) {
+	toolRegistryMu.Lock()
+	defer toolRegistryMu.Unlock()
+	removed := make(map[string]struct{}, len(names))
+	for _, name := range names {
+		removed[name] = struct{}{}
+		delete(RegMcpToolFuncs, name)
+	}
+	filtered := registeredMcpTools[:0]
+	for _, tool := range registeredMcpTools {
+		if _, ok := removed[tool.Function.Name]; !ok {
+			filtered = append(filtered, tool)
+		}
+	}
+	registeredMcpTools = filtered
 }
 
 // ClearMcpTools 清空 MCP 工具注册表（执行函数 + schema）。
 // 重新加载 MCP server 前调用，避免旧 server 残留的工具名污染注册表。
 func ClearMcpTools() {
+	toolRegistryMu.Lock()
+	defer toolRegistryMu.Unlock()
 	registeredMcpTools = nil
 	for name := range RegMcpToolFuncs {
 		delete(RegMcpToolFuncs, name)
@@ -66,10 +101,14 @@ func ClearMcpTools() {
 }
 
 func RegisteredMcpTools() []ToolReg {
+	toolRegistryMu.RLock()
+	defer toolRegistryMu.RUnlock()
 	return append([]ToolReg(nil), registeredMcpTools...)
 }
 
 func HasLocalTool(name string) bool {
+	toolRegistryMu.RLock()
+	defer toolRegistryMu.RUnlock()
 	if _, ok := RegToolFuncs[name]; ok {
 		return true
 	}
@@ -160,6 +199,8 @@ func toolAllowed(name string, disabledSet map[string]bool) bool {
 //
 // agent 主循环只需调 GetAllTool(provider)，无需传开关参数。
 func GetAllTool(provider string) []ToolReg {
+	toolRegistryMu.RLock()
+	defer toolRegistryMu.RUnlock()
 	var result []ToolReg
 	switch provider {
 	case "openai:completions":
@@ -189,6 +230,8 @@ func GetAllTool(provider string) []ToolReg {
 // 与 GetAllTool 用同一套 mcpEnabled / disabledTools 过滤，保证模型看到的工具集 =
 // RunTools 实际可执行的集合。
 func GetEnabledTools() map[string]ToolFunc {
+	toolRegistryMu.RLock()
+	defer toolRegistryMu.RUnlock()
 	result := make(map[string]ToolFunc)
 	for name, fn := range RegToolFuncs {
 		if toolAllowed(name, disabledTools) {

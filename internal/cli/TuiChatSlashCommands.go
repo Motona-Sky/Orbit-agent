@@ -16,6 +16,7 @@ const (
 	slashCommandProvider
 	slashCommandEffort
 	slashCommandSkills
+	slashCommandMCP
 	slashCommandNew
 	slashCommandClear
 )
@@ -33,6 +34,7 @@ func (m model) slashCommands() []slashCommand {
 		{Name: providerSetupCommand, Description: m.messages.Chat.ProviderCommandDescription, ID: slashCommandProvider},
 		{Name: effortSetupCommand, Description: m.messages.Chat.EffortCommandDescription, ID: slashCommandEffort},
 		{Name: skillsCommand, Description: m.messages.Chat.SkillsCommandDescription, ID: slashCommandSkills},
+		{Name: mcpCommand, Description: m.messages.Chat.MCPCommandDescription, ID: slashCommandMCP},
 		{Name: newCommand, Description: m.messages.Chat.NewCommandDescription, ID: slashCommandNew},
 		{Name: clearCommand, Description: m.messages.Chat.ClearCommandDescription, ID: slashCommandClear},
 	}

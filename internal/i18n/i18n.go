@@ -79,12 +79,23 @@ type ChatMessages struct {
 	ProviderCommandDescription string
 	EffortCommandDescription   string
 	SkillsCommandDescription   string
+	MCPCommandDescription      string
 	NewCommandDescription      string
 	ClearCommandDescription    string
 	SkillsEmpty                string
 	SkillsTaskRequired         string
 	SkillNotFound              string
 	SkillPathMissing           string
+	MCPPageTitle               string
+	MCPPageHint                string
+	MCPEmpty                   string
+	MCPStarting                string
+	MCPReady                   string
+	MCPError                   string
+	MCPDisabled                string
+	MCPStopped                 string
+	MCPErrorSummary            string
+	MCPStartupError            string
 
 	ContextUsage  string
 	TaskCompleted string

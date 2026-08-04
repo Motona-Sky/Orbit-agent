@@ -16,7 +16,7 @@ import (
 	mcpsdk "github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
-func TestLoadMcpconfigParsesNamedServers(t *testing.T) {
+func TestLoadMCPConfigParsesNamedServers(t *testing.T) {
 	tempDir := t.TempDir()
 	oldCwd, err := os.Getwd()
 	if err != nil {
@@ -57,6 +57,69 @@ func TestLoadMcpconfigParsesNamedServers(t *testing.T) {
 	}
 	if server.Env["TZ"] != "Asia/Shanghai" {
 		t.Fatalf("Env[TZ] = %q", server.Env["TZ"])
+	}
+}
+
+func TestLoadMCPConfigTracksOverrideSourceAndDefaultsEnabled(t *testing.T) {
+	home := t.TempDir()
+	project := t.TempDir()
+	t.Setenv("HOME", home)
+	oldCwd, err := os.Getwd()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Chdir(project); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = os.Chdir(oldCwd) })
+	globalDir := filepath.Join(home, ".orbit")
+	if err := os.MkdirAll(globalDir, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(globalDir, ".mcp.json"), []byte(`{"mcpServers":{"shared":{"command":"global"},"global":{"command":"only"}}}`), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	projectPath := filepath.Join(project, ".mcp.json")
+	if err := os.WriteFile(projectPath, []byte(`{"mcpServers":{"shared":{"command":"project","description":"Project service"}}}`), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	cfg, sources, err := loadMcpConfigWithSources()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cfg.MCPServers["shared"].Command != "project" || sources["shared"] != projectPath {
+		t.Fatalf("override/source = %#v, %q", cfg.MCPServers["shared"], sources["shared"])
+	}
+	if !cfg.MCPServers["shared"].IsEnabled() || !cfg.MCPServers["global"].IsEnabled() {
+		t.Fatal("missing enabled should default to true")
+	}
+}
+
+func TestPersistEnabledWritesOnlyEffectiveSource(t *testing.T) {
+	path := filepath.Join(t.TempDir(), ".mcp.json")
+	if err := os.WriteFile(path, []byte(`{"mcpServers":{"demo":{"command":"demo","description":"keep"}}}`), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := persistEnabled(path, "demo", false); err != nil {
+		t.Fatal(err)
+	}
+	cfg, err := loadMcpConfigFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	server := cfg.MCPServers["demo"]
+	if server.IsEnabled() || server.Description != "keep" || server.Command != "demo" {
+		t.Fatalf("persisted server = %#v", server)
+	}
+}
+
+func TestRecentBufferKeepsLatestStderr(t *testing.T) {
+	buffer := &recentBuffer{limit: 5}
+	_, _ = buffer.Write([]byte("1234"))
+	_, _ = buffer.Write([]byte("5678"))
+	if got := buffer.String(); got != "45678" {
+		t.Fatalf("String() = %q, want %q", got, "45678")
 	}
 }
 
