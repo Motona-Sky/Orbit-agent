@@ -1,5 +1,7 @@
 package tools
 
+import "context"
+
 type ToolReg struct {
 	Type     string       `json:"type"`
 	Function ToolFunction `json:"function"`
@@ -15,7 +17,7 @@ type ToolFunction struct {
 }
 type ToolFunc struct {
 	Name     string
-	Function func(jsonstr []any) (string, error)
+	Function func(context.Context, []any) (string, error)
 }
 type ToolParameters struct {
 	Type                 string                         `json:"type"`
@@ -50,10 +52,8 @@ func RegTools(tools []ToolReg) []ToolReg {
 	return registeredTools
 }
 
-// RegMcpTool 登记一个 MCP 工具的 schema，使其能合并到 GetAllTool 的输出中发给模型。
-// 仅写 registeredMcpTools；执行函数请通过 RegMcpToolFuncs 注册。
-func RegMcpTool(tool ToolReg) {
-	registeredMcpTools = append(registeredMcpTools, tool)
+func RegMcpTools(tools []ToolReg) {
+	registeredMcpTools = append(registeredMcpTools, tools...)
 }
 
 // ClearMcpTools 清空 MCP 工具注册表（执行函数 + schema）。
@@ -63,6 +63,22 @@ func ClearMcpTools() {
 	for name := range RegMcpToolFuncs {
 		delete(RegMcpToolFuncs, name)
 	}
+}
+
+func RegisteredMcpTools() []ToolReg {
+	return append([]ToolReg(nil), registeredMcpTools...)
+}
+
+func HasLocalTool(name string) bool {
+	if _, ok := RegToolFuncs[name]; ok {
+		return true
+	}
+	for _, tool := range registeredTools {
+		if tool.Function.Name == name {
+			return true
+		}
+	}
+	return false
 }
 
 // 获取所有工具

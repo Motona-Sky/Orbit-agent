@@ -3,7 +3,7 @@ package event
 import (
 	"testing"
 
-	"looporbit/internal/utils"
+	"orbit/internal/utils"
 )
 
 func preserveSessionState(t *testing.T) {

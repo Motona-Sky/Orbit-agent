@@ -6,7 +6,7 @@ var simplifiedChineseLanguage = Language{
 	Name: "简体中文",
 	Messages: Messages{
 		Chat: ChatMessages{
-			BrandName:                  "LoopOrbit",
+			BrandName:                  "Orbit",
 			AgentWorkspace:             "agent 工作区",
 			FooterHelp:                 "tab 切换焦点 | shift 选择文字 | Ctrl+C 退出",
 			CompactFooterHelp:          "Ctrl+C 取消/退出 · Shift+Enter 换行",
@@ -24,7 +24,7 @@ var simplifiedChineseLanguage = Language{
 			AgentChatTitle:             "Agent 聊天",
 			YouLabel:                   "你",
 			SampleUserMessage:          "终端",
-			AssistantLabel:             "LoopOrbit",
+			AssistantLabel:             "Orbit",
 			SampleAssistantMessage:     "我会先保持纯 TUI 外壳，暂不绑定真实功能。",
 			ComposerTitle:              "输入",
 			MessageAgent:               "给 agent 发送消息",
@@ -73,7 +73,7 @@ var simplifiedChineseLanguage = Language{
 			TurnCanceled:  "■ 已取消当前任务",
 		},
 		LanguageSetup: LanguageSetupMessages{
-			Title:        "LoopOrbit",
+			Title:        "Orbit",
 			Heading:      "语言设置",
 			Subtitle:     "选择你偏好的语言以继续",
 			MoveShortcut: "↑/↓",
@@ -84,7 +84,7 @@ var simplifiedChineseLanguage = Language{
 			QuitAction:   "退出",
 		},
 		SessionSetup: SessionSetupMessages{
-			Title:         "LoopOrbit",
+			Title:         "Orbit",
 			Heading:       "恢复历史会话",
 			Subtitle:      "选择一个历史对话继续",
 			EmptyState:    "没有可恢复的历史会话",
@@ -97,9 +97,9 @@ var simplifiedChineseLanguage = Language{
 			QuitAction:    "退出",
 		},
 		ThemeSetup: ThemeSetupMessages{
-			Title:              "LoopOrbit",
+			Title:              "Orbit",
 			Subtitle:           "主题设置",
-			Description:        "选择 LoopOrbit 的界面风格",
+			Description:        "选择 Orbit 的界面风格",
 			DarkOption:         "轨道暗色",
 			LightOption:        "日光亮色",
 			HighContrastOption: "信号高对比",
@@ -112,7 +112,7 @@ var simplifiedChineseLanguage = Language{
 			QuitAction:         "退出",
 		},
 		EffortSetup: EffortSetupMessages{
-			Title:        "LoopOrbit",
+			Title:        "Orbit",
 			Heading:      "思考强度",
 			Subtitle:     "选择后续请求使用的思考强度",
 			MoveShortcut: "↑/↓",
@@ -123,7 +123,7 @@ var simplifiedChineseLanguage = Language{
 			QuitAction:   "退出",
 		},
 		ModelSetup: ModelSetupMessages{
-			Title:             "LoopOrbit",
+			Title:             "Orbit",
 			Heading:           "模型选择",
 			Subtitle:          "选择当前提供商可用的模型",
 			LoadingMessage:    "正在获取模型列表…",
@@ -139,7 +139,7 @@ var simplifiedChineseLanguage = Language{
 			QuitKey:           "Esc",
 			QuitAction:        "返回",
 		}, ProviderSetup: ProviderSetupMessages{
-			Title:               "LoopOrbit",
+			Title:               "Orbit",
 			SelectSubtitle:      "模型提供商设置",
 			SelectDescription:   "选择用于模型请求的提供商",
 			NameSubtitle:        "供应商名称",

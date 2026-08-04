@@ -4,7 +4,7 @@ import (
 	"crypto/rand"
 	"crypto/sha256"
 	"encoding/hex"
-	"looporbit/internal/utils"
+	"orbit/internal/utils"
 )
 
 type SessionId struct {

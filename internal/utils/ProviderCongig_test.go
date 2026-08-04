@@ -4,7 +4,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	"looporbit/internal/config"
+	"orbit/internal/config"
 )
 
 func TestReloadProviderConfigUpdatesRuntimeFieldsAtomically(t *testing.T) {

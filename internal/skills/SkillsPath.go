@@ -1,7 +1,7 @@
 package skills
 
 import (
-	"looporbit/internal/utils"
+	"orbit/internal/utils"
 	"path/filepath"
 )
 

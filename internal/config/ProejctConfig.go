@@ -6,7 +6,7 @@ import (
 )
 
 func CreateProjectConfig() error {
-	configPath := filepath.Join(Cwd, ".looporbit")
+	configPath := filepath.Join(Cwd, ".orbit")
 
 	if err := os.MkdirAll(configPath, 0755); err != nil {
 		return err

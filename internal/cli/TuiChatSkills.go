@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"strings"
 
-	"looporbit/internal/skills"
+	"orbit/internal/skills"
 
 	tea "github.com/charmbracelet/bubbletea"
 )

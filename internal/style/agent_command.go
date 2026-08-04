@@ -3,7 +3,7 @@ package style
 import (
 	"strings"
 
-	"looporbit/internal/config"
+	"orbit/internal/config"
 
 	"github.com/charmbracelet/lipgloss"
 )

@@ -4,7 +4,7 @@ import (
 	"errors"
 	"testing"
 
-	"looporbit/internal/memorys"
+	"orbit/internal/memorys"
 )
 
 func TestSessionCommandAliasesUseSameFlow(t *testing.T) {

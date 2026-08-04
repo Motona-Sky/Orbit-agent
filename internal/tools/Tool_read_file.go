@@ -2,10 +2,11 @@ package tools
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
-	"looporbit/internal/utils"
+	"orbit/internal/utils"
 	"os"
 	"strings"
 )
@@ -120,7 +121,7 @@ func ReadFile(filepath string, startline int, limitline int) (string, error) {
 }
 
 // Json传入，运行入口
-func CallReadFIleFunc(jsonstr []any) (string, error) {
+func CallReadFIleFunc(_ context.Context, jsonstr []any) (string, error) {
 	if len(jsonstr) == 0 {
 		return "", fmt.Errorf("tool calls is empty ReadFileFunc")
 	}

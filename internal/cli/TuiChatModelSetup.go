@@ -4,8 +4,8 @@ import (
 	"fmt"
 	"strings"
 
-	"looporbit/internal/config"
-	"looporbit/internal/utils"
+	"orbit/internal/config"
+	"orbit/internal/utils"
 
 	tea "github.com/charmbracelet/bubbletea"
 )

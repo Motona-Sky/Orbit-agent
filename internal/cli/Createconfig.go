@@ -2,8 +2,8 @@ package cli
 
 import (
 	"fmt"
-	"looporbit/internal/config"
-	"looporbit/internal/style"
+	"orbit/internal/config"
+	"orbit/internal/style"
 )
 
 func CreateConfig() error { //创建配置文件 setup

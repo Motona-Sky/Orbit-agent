@@ -2,16 +2,21 @@ package mcp
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
-	"looporbit/internal/tools"
-	"looporbit/internal/utils"
 	"net/http"
+	"net/url"
+	"orbit/internal/config"
+	"orbit/internal/tools"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
 	"strings"
+	"sync"
 
 	mcpsdk "github.com/modelcontextprotocol/go-sdk/mcp"
 )
@@ -49,11 +54,19 @@ func (c *McpClient) Close() error {
 
 // McpConfigPaths 返回所有需要读取的 .mcp.json 路径，按优先级从低到高排列。
 // 后面的路径在合并时会覆盖前面同名的 server（项目级配置优先于全局配置）。
-func McpConfigPaths() []string {
-	return []string{
-		filepath.Join(utils.ConfigFolderPath, ".mcp.json"), // 全局配置（可选）
-		filepath.Join(utils.Cwd, ".mcp.json"),              // 项目配置（优先级更高）
+func McpConfigPaths() ([]string, error) {
+	configPaths, err := config.GetConfigFolderPath()
+	if err != nil {
+		return nil, fmt.Errorf("resolve global config folder: %w", err)
 	}
+	cwd, err := os.Getwd()
+	if err != nil {
+		return nil, fmt.Errorf("resolve project working directory: %w", err)
+	}
+	return []string{
+		filepath.Join(configPaths["ConfigFolder"], ".mcp.json"),
+		filepath.Join(cwd, ".mcp.json"),
+	}, nil
 }
 
 // loadMcpConfigFile 读取单个路径下的 .mcp.json。
@@ -78,8 +91,12 @@ func loadMcpConfigFile(path string) (MCPConfig, error) {
 // 去重依据 server name：同名 server 以优先级更高的路径（列表中更靠后的路径）为准。
 func LoadMcpconfig() (MCPConfig, error) {
 	merged := MCPConfig{MCPServers: make(map[string]MCP)}
+	paths, err := McpConfigPaths()
+	if err != nil {
+		return MCPConfig{}, err
+	}
 
-	for _, path := range McpConfigPaths() {
+	for _, path := range paths {
 		config, err := loadMcpConfigFile(path)
 		if err != nil {
 			return MCPConfig{}, err
@@ -104,7 +121,7 @@ func ParseMcp(config MCPConfig) MCPConfig {
 
 // newMcpClientImplementation 是所有 MCP client 连接时使用的统一身份标识。
 var newMcpClientImplementation = &mcpsdk.Implementation{
-	Name:    "looporbit-agent",
+	Name:    "orbit-agent",
 	Version: "dev",
 }
 
@@ -137,31 +154,56 @@ func listToolsFromSession(ctx context.Context, session *mcpsdk.ClientSession) ([
 // 用于把 .mcp.json 中配置的 Headers（如 Authorization）注入到 HTTP/SSE 传输中，
 // 因为 SDK 的 StreamableClientTransport/SSEClientTransport 都不直接支持自定义 headers。
 type headerInjectingTransport struct {
-	base    http.RoundTripper
-	headers map[string]string
+	base   http.RoundTripper
+	header http.Header
+	origin *url.URL
+}
+
+func sameOrigin(origin, target *url.URL) bool {
+	return origin != nil && target != nil &&
+		strings.EqualFold(origin.Scheme, target.Scheme) &&
+		strings.EqualFold(origin.Host, target.Host)
 }
 
 func (t *headerInjectingTransport) RoundTrip(req *http.Request) (*http.Response, error) {
-	// RoundTripper 约定不能修改传入的请求，需先 Clone。
+	if !sameOrigin(t.origin, req.URL) {
+		return nil, fmt.Errorf("refuse cross-origin MCP request from %s to %s", t.origin, req.URL)
+	}
 	cloned := req.Clone(req.Context())
-	for key, value := range t.headers {
-		cloned.Header.Set(key, value)
+	for key, values := range t.header {
+		for _, value := range values {
+			cloned.Header.Add(key, value)
+		}
 	}
 	return t.base.RoundTrip(cloned)
 }
 
-// newHTTPClientWithHeaders 返回一个在每次请求中注入固定 headers 的 *http.Client。
-// headers 为空时返回 nil，调用方应据此使用 SDK 默认的 http.DefaultClient。
-func newHTTPClientWithHeaders(headers map[string]string) *http.Client {
-	if len(headers) == 0 {
-		return nil
+func newHTTPClientWithHeaders(endpoint string, headers map[string]string) (*http.Client, error) {
+	origin, err := url.Parse(endpoint)
+	if err != nil {
+		return nil, fmt.Errorf("parse MCP endpoint %q: %w", endpoint, err)
+	}
+	if origin.Scheme == "" || origin.Host == "" {
+		return nil, fmt.Errorf("MCP endpoint %q must be an absolute URL", endpoint)
+	}
+
+	header := make(http.Header, len(headers))
+	for key, value := range headers {
+		header.Set(key, value)
 	}
 	return &http.Client{
 		Transport: &headerInjectingTransport{
-			base:    http.DefaultTransport,
-			headers: headers,
+			base:   http.DefaultTransport,
+			header: header,
+			origin: origin,
 		},
-	}
+		CheckRedirect: func(req *http.Request, via []*http.Request) error {
+			if !sameOrigin(origin, req.URL) {
+				return fmt.Errorf("refuse cross-origin MCP redirect from %s to %s", origin, req.URL)
+			}
+			return nil
+		},
+	}, nil
 }
 
 // RunStdioMcp 启动 stdio MCP Server，完成初始化并获取全部工具列表。
@@ -199,9 +241,13 @@ func RunHTTPMcp(ctx context.Context, config MCP) (*McpClient, []*mcpsdk.Tool, er
 		return nil, nil, fmt.Errorf("url is empty")
 	}
 
+	httpClient, err := newHTTPClientWithHeaders(config.URL, config.Headers)
+	if err != nil {
+		return nil, nil, err
+	}
 	transport := &mcpsdk.StreamableClientTransport{
 		Endpoint:   config.URL,
-		HTTPClient: newHTTPClientWithHeaders(config.Headers),
+		HTTPClient: httpClient,
 	}
 
 	session, err := newClientSession(ctx, transport)
@@ -225,9 +271,13 @@ func RunSSEMcp(ctx context.Context, config MCP) (*McpClient, []*mcpsdk.Tool, err
 		return nil, nil, fmt.Errorf("url is empty")
 	}
 
+	httpClient, err := newHTTPClientWithHeaders(config.URL, config.Headers)
+	if err != nil {
+		return nil, nil, err
+	}
 	transport := &mcpsdk.SSEClientTransport{
 		Endpoint:   config.URL,
-		HTTPClient: newHTTPClientWithHeaders(config.Headers),
+		HTTPClient: httpClient,
 	}
 
 	session, err := newClientSession(ctx, transport)
@@ -268,6 +318,7 @@ func runMcpByType(ctx context.Context, config MCP) (*McpClient, []*mcpsdk.Tool, 
 //
 // 调用方在 Agent 结束时应对返回的每个 client 调用 Close。
 func RunMcp(ctx context.Context) ([]*McpClient, error) {
+	ClearMcpState()
 	config, err := LoadMcpconfig()
 	if err != nil {
 		return nil, fmt.Errorf("load mcp config: %w", err)
@@ -276,14 +327,21 @@ func RunMcp(ctx context.Context) ([]*McpClient, error) {
 	var clients []*McpClient
 	var errs []error
 	for name, server := range config.MCPServers {
-		client, tools, err := runMcpByType(ctx, server)
+		client, serverTools, err := runMcpByType(ctx, server)
 		if err != nil {
 			errs = append(errs, fmt.Errorf("start mcp server %q: %w", name, err))
 			continue
 		}
-		RegisterMcpTools(name, client, tools)
+		if _, err := RegisterMcpTools(name, client, serverTools); err != nil {
+			_ = client.Close()
+			errs = append(errs, fmt.Errorf("register mcp server %q: %w", name, err))
+			continue
+		}
 		clients = append(clients, client)
 	}
+	mcpStateMu.Lock()
+	activeClients = append([]*McpClient(nil), clients...)
+	mcpStateMu.Unlock()
 
 	if len(errs) > 0 {
 		return clients, errors.Join(errs...)
@@ -308,54 +366,121 @@ type McpToolEntry struct {
 	InputSchema any        // 原始 JSON Schema，原样回填给模型的 parameters 字段
 }
 
-var McpToolRegistry = map[string]McpToolEntry{}
+var (
+	McpToolRegistry = map[string]McpToolEntry{}
+	mcpStateMu      sync.Mutex
+	activeClients   []*McpClient
+	invalidNameRun  = regexp.MustCompile(`[^A-Za-z0-9_-]+`)
+)
 
-// ExposedToolName 生成暴露给模型的工具名：mcp__<server>__<tool>。
-// 该前缀用于区分 MCP 工具与本地工具，并避免不同 server 间的同名冲突。
 func ExposedToolName(server, tool string) string {
-	return "mcp__" + server + "__" + tool
+	digest := sha256.Sum256([]byte(server + "\x00" + tool))
+	suffix := hex.EncodeToString(digest[:6])
+	base := "mcp_" + sanitizeToolName(server) + "_" + sanitizeToolName(tool)
+	maxBase := 64 - 1 - len(suffix)
+	if len(base) > maxBase {
+		base = base[:maxBase]
+	}
+	base = strings.Trim(base, "_-")
+	if base == "" {
+		base = "mcp"
+	}
+	return base + "_" + suffix
 }
 
-// RegisterMcpTools 把一个 MCP server 暴露的全部工具同时登记到三处：
-//  1. McpToolRegistry：SelectAndCallMcp 据此把模型调用转发回 server
-//  2. tools.RegMcpToolFuncs：让 agent 主循环的 RunTools 能像本地工具一样执行 MCP 工具
-//  3. tools.RegMcpTool：让 GetAllTool 能把 MCP 工具的 schema 合并发给模型
-//
-// 三处注册保持同名（exposed name），避免执行层和声明层错位。
-// 返回所有暴露给模型的工具名，便于上层做日志/调试。
-func RegisterMcpTools(serverName string, client *McpClient, mcpTools []*mcpsdk.Tool) []string {
-	names := make([]string, 0, len(mcpTools))
-	for _, t := range mcpTools {
-		exposed := ExposedToolName(serverName, t.Name)
-		McpToolRegistry[exposed] = McpToolEntry{
-			Client:      client,
-			Server:      serverName,
-			ToolName:    t.Name,
-			Description: t.Description,
-			InputSchema: t.InputSchema,
-		}
+func sanitizeToolName(value string) string {
+	value = invalidNameRun.ReplaceAllString(value, "_")
+	return strings.Trim(value, "_-")
+}
 
-		// 闭包捕获 exposed，避免循环变量别名问题。
-		// ToolFunc.Function 签名是 func([]any) (string, error)，没有 ctx 参数；
-		// 这里用 context.Background() 让 MCP 调用走 SDK 默认的会话级多路复用。
-		// 若未来需要按 agent 调用级超时/取消控制，需要扩展 ToolFunc 签名。
-		exposedName := exposed
-		tools.RegMcpToolFuncs[exposed] = tools.ToolFunc{
-			Name: exposed,
-			Function: func(args []any) (string, error) {
-				_, result, err := SelectAndCallMcp(context.Background(), exposedName, mcpArgsToJSON(args))
-				return result, err
-			},
+func RegisterMcpTools(serverName string, client *McpClient, mcpTools []*mcpsdk.Tool) ([]string, error) {
+	type pendingTool struct {
+		name   string
+		entry  McpToolEntry
+		fn     tools.ToolFunc
+		schema tools.ToolReg
+	}
+	pending := make([]pendingTool, 0, len(mcpTools))
+	seen := make(map[string]struct{}, len(mcpTools))
+
+	mcpStateMu.Lock()
+	defer mcpStateMu.Unlock()
+	for _, tool := range mcpTools {
+		if tool == nil {
+			return nil, fmt.Errorf("MCP server %q returned a nil tool", serverName)
 		}
-		tools.RegMcpTool(tools.ToolReg{
-			Type: "function",
-			Function: tools.ToolFunction{
-				Name:        exposed,
-				Description: t.Description,
-				Parameters:  t.InputSchema, // 原样塞，OpenAI/Anthropic 都吃 JSON Schema
+		exposed := ExposedToolName(serverName, tool.Name)
+		if _, ok := seen[exposed]; ok {
+			return nil, fmt.Errorf("duplicate MCP tool name %q in server %q", exposed, serverName)
+		}
+		if tools.HasLocalTool(exposed) {
+			return nil, fmt.Errorf("MCP tool name %q conflicts with a local tool", exposed)
+		}
+		if _, ok := McpToolRegistry[exposed]; ok {
+			return nil, fmt.Errorf("MCP tool name %q is already registered", exposed)
+		}
+		if _, ok := tools.RegMcpToolFuncs[exposed]; ok {
+			return nil, fmt.Errorf("MCP tool function %q is already registered", exposed)
+		}
+		seen[exposed] = struct{}{}
+		exposedName := exposed
+		pending = append(pending, pendingTool{
+			name: exposed,
+			entry: McpToolEntry{
+				Client:      client,
+				Server:      serverName,
+				ToolName:    tool.Name,
+				Description: tool.Description,
+				InputSchema: tool.InputSchema,
+			},
+			fn: tools.ToolFunc{
+				Name: exposed,
+				Function: func(ctx context.Context, args []any) (string, error) {
+					_, result, err := SelectAndCallMcp(ctx, exposedName, mcpArgsToJSON(args))
+					return result, err
+				},
+			},
+			schema: tools.ToolReg{
+				Type: "function",
+				Function: tools.ToolFunction{
+					Name:        exposed,
+					Description: tool.Description,
+					Parameters:  tool.InputSchema,
+				},
 			},
 		})
-		names = append(names, exposed)
+	}
+
+	names := make([]string, 0, len(pending))
+	schemas := make([]tools.ToolReg, 0, len(pending))
+	for _, item := range pending {
+		McpToolRegistry[item.name] = item.entry
+		tools.RegMcpToolFuncs[item.name] = item.fn
+		names = append(names, item.name)
+		schemas = append(schemas, item.schema)
+	}
+	tools.RegMcpTools(schemas)
+	return names, nil
+}
+
+func ClearMcpState() {
+	mcpStateMu.Lock()
+	clients := activeClients
+	activeClients = nil
+	McpToolRegistry = map[string]McpToolEntry{}
+	tools.ClearMcpTools()
+	mcpStateMu.Unlock()
+	for _, client := range clients {
+		_ = client.Close()
+	}
+}
+
+func RegisteredMcpToolNames() []string {
+	mcpStateMu.Lock()
+	defer mcpStateMu.Unlock()
+	names := make([]string, 0, len(McpToolRegistry))
+	for name := range McpToolRegistry {
+		names = append(names, name)
 	}
 	return names
 }
@@ -393,7 +518,9 @@ func mcpArgsToJSON(args []any) string {
 // 并发安全：可在多个 goroutine 中同时调用（同一 session 的 CallTool 由 SDK
 // 通过 JSON-RPC request ID 多路复用）。
 func SelectAndCallMcp(ctx context.Context, exposedName, argumentsJSON string) (handled bool, result string, err error) {
+	mcpStateMu.Lock()
 	entry, ok := McpToolRegistry[exposedName]
+	mcpStateMu.Unlock()
 	if !ok {
 		return false, "", nil
 	}

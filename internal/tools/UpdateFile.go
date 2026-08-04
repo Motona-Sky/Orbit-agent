@@ -2,6 +2,7 @@ package tools
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -128,7 +129,7 @@ func isBinaryContent(content []byte) bool {
 }
 
 // Json传入，运行入口
-func CallUpdateFileFunc(jsonstr []any) (string, error) {
+func CallUpdateFileFunc(_ context.Context, jsonstr []any) (string, error) {
 	if len(jsonstr) == 0 {
 		return "", fmt.Errorf("tool calls is empty UpdateFileFunc")
 	}

@@ -1,10 +1,12 @@
 package cli
 
 import (
+	"context"
 	"errors"
 	"fmt"
-	"looporbit/internal/config"
-	"looporbit/internal/memorys"
+	"orbit/internal/config"
+	"orbit/internal/mcp"
+	"orbit/internal/memorys"
 	"os"
 
 	tea "github.com/charmbracelet/bubbletea"
@@ -81,16 +83,34 @@ func OpenSessionTui(language string, sessions []memorys.SessionSummary, skipped 
 	return m.SelectedSession, true, nil
 }
 
-func OpenChatTuiForSession(language string, session memorys.SessionSummary) error {
-	p := newChatProgram(NewModelForSession(language, session))
-	finalModel, err := p.Run()
+func runWithMcp(run func() error) error {
+	ctx, cancel := context.WithCancel(context.Background())
+	clients, err := mcp.RunMcp(ctx)
 	if err != nil {
-		return fmt.Errorf("run restored chat tui: %w", err)
+		fmt.Fprintf(os.Stderr, "MCP startup warning: %v\n", err)
 	}
-	if m, ok := finalModel.(model); ok && m.wantsRestart {
-		return runChatLoop()
-	}
-	return nil
+	defer func() {
+		cancel()
+		for _, client := range clients {
+			_ = client.Close()
+		}
+		mcp.ClearMcpState()
+	}()
+	return run()
+}
+
+func OpenChatTuiForSession(language string, session memorys.SessionSummary) error {
+	return runWithMcp(func() error {
+		p := newChatProgram(NewModelForSession(language, session))
+		finalModel, err := p.Run()
+		if err != nil {
+			return fmt.Errorf("run restored chat tui: %w", err)
+		}
+		if m, ok := finalModel.(model); ok && m.wantsRestart {
+			return runChatLoopWithoutMcp()
+		}
+		return nil
+	})
 }
 
 func OpenChatTui() error {
@@ -109,8 +129,12 @@ func OpenChatTui() error {
 	return runChatLoop()
 }
 
-// runChatLoop 运行主聊天 TUI，当用户执行 /new 或 /clear 时自动重启新会话。
 func runChatLoop() error {
+	return runWithMcp(runChatLoopWithoutMcp)
+}
+
+// runChatLoopWithoutMcp 运行主聊天 TUI，当用户执行 /new 或 /clear 时自动重启新会话。
+func runChatLoopWithoutMcp() error {
 	for {
 		p := newChatProgram(NewModelFromConfig())
 		finalModel, err := p.Run()

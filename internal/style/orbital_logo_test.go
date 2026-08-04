@@ -9,8 +9,8 @@ import (
 )
 
 func TestRenderOrbitalLogoUsesMinimalPromptWordmark(t *testing.T) {
-	logo := ansi.Strip(RenderOrbitalLogo("LoopOrbit"))
-	if logo != "◉ LOOPORBIT / AGENT" {
+	logo := ansi.Strip(RenderOrbitalLogo("Orbit"))
+	if logo != "◉ ORBIT / AGENT" {
 		t.Fatalf("logo = %q, want minimal prompt wordmark", logo)
 	}
 	if lipgloss.Height(logo) != 1 || strings.Contains(logo, "██") {
@@ -25,13 +25,13 @@ func TestRenderOrbitalLogoAdaptsAcrossViewportWidths(t *testing.T) {
 		want      string
 		forbidden string
 	}{
-		{name: "full", width: 24, want: "◉ LOOPORBIT / AGENT"},
-		{name: "compact", width: 15, want: "◉ LOOPORBIT", forbidden: "/ AGENT"},
-		{name: "ultra narrow", width: 8, forbidden: "/ AGENT"},
+		{name: "full", width: 15, want: "◉ ORBIT / AGENT"},
+		{name: "compact", width: 7, want: "◉ ORBIT", forbidden: "/ AGENT"},
+		{name: "ultra narrow", width: 5, forbidden: "/ AGENT"},
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			logo := ansi.Strip(RenderOrbitalLogoForViewport("LoopOrbit", test.width))
+			logo := ansi.Strip(RenderOrbitalLogoForViewport("Orbit", test.width))
 			if test.want != "" && logo != test.want {
 				t.Fatalf("logo = %q, want %q", logo, test.want)
 			}

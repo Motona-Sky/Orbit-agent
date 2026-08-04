@@ -1,12 +1,13 @@
 package cli
 
 import (
+	"context"
 	"errors"
 	"strconv"
 	"strings"
 
-	"looporbit/internal/agentui"
-	"looporbit/internal/event"
+	"orbit/internal/agentui"
+	"orbit/internal/event"
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
@@ -38,8 +39,11 @@ func waitForAgentUI(ui *agentui.AgentUI) tea.Cmd {
 }
 
 func runAgent(ui *agentui.AgentUI, input event.TuiEvent, errorLabel string) tea.Cmd {
+	ctx, cancel := context.WithCancel(context.Background())
+	ui.SetCancel(cancel)
 	return func() tea.Msg {
-		return finishAgentRun(ui, errorLabel, event.MessagesEvent(input, ui))
+		defer cancel()
+		return finishAgentRun(ui, errorLabel, event.MessagesEvent(ctx, input, ui))
 	}
 }
 

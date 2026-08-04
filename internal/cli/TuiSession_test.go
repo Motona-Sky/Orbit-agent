@@ -4,7 +4,7 @@ import (
 	"strings"
 	"testing"
 
-	"looporbit/internal/memorys"
+	"orbit/internal/memorys"
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"

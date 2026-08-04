@@ -1,6 +1,6 @@
 package utils
 
-import "looporbit/internal/config"
+import "orbit/internal/config"
 
 func UpdateProviderConfig(provider string) {
 	ProviderConfig = provider

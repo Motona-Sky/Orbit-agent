@@ -1,6 +1,6 @@
 package memorys
 
-import "looporbit/internal/llm"
+import "orbit/internal/llm"
 
 // AppendMemoryMessages 按原始顺序将消息追加到记忆后面。
 func AppendMemoryMessages(memory []llm.MemoryMessage, messages []llm.MemoryMessage) []llm.MemoryMessage {

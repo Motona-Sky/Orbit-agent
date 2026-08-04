@@ -1,6 +1,6 @@
 package cli
 
-import "looporbit/internal/config"
+import "orbit/internal/config"
 
 func orbitalViewport(width, height int, styleConfig config.StyleConfig) (int, int) {
 	layout := styleConfig.Layout

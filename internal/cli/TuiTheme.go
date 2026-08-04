@@ -1,9 +1,9 @@
 package cli
 
 import (
-	"looporbit/internal/config"
-	"looporbit/internal/i18n"
-	"looporbit/internal/style"
+	"orbit/internal/config"
+	"orbit/internal/i18n"
+	"orbit/internal/style"
 
 	tea "github.com/charmbracelet/bubbletea"
 )

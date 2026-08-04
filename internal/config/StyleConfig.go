@@ -9,8 +9,9 @@ import (
 )
 
 const (
-	StyleConfigFileName = "style.yaml"
-	StyleConfigPathEnv  = "LOOPORBIT_STYLE_CONFIG_PATH"
+	StyleConfigFileName      = "style.yaml"
+	StyleConfigPathEnv       = "ORBIT_STYLE_CONFIG_PATH"
+	LegacyStyleConfigPathEnv = "LOOPORBIT_STYLE_CONFIG_PATH"
 )
 
 type StyleConfig struct {
@@ -40,6 +41,9 @@ type StyleLayout struct {
 
 func GetStyleConfigPath() (string, error) {
 	if path := os.Getenv(StyleConfigPathEnv); path != "" {
+		return path, nil
+	}
+	if path := os.Getenv(LegacyStyleConfigPathEnv); path != "" {
 		return path, nil
 	}
 	return filepath.Join(ConfigPath, StyleConfigFileName), nil

@@ -1,6 +1,6 @@
 package utils
 
-import "looporbit/internal/config"
+import "orbit/internal/config"
 
 // ReloadThinkLevelConfig refreshes the runtime reasoning effort from application config.
 func ReloadThinkLevelConfig() error {

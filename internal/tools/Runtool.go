@@ -1,15 +1,16 @@
 package tools
 
 import (
+	"context"
 	"errors"
 	"fmt"
-	"looporbit/internal/utils"
+	"orbit/internal/utils"
 )
 
 // RunTools 并发执行模型返回的 tool_calls。
 // 内部通过 GetEnabledTools() 拿到当前可执行的工具集合（按 mcpEnabled / disabledTools 过滤），
 // agent 主循环无需传开关参数 —— MCP 开关和工具禁用全部封装在 tools 包内。
-func RunTools(toolsValue []any) ([]ToolResult, error) {
+func RunTools(ctx context.Context, toolsValue []any) ([]ToolResult, error) {
 	enabled := GetEnabledTools()
 
 	type toolJob struct {
@@ -53,7 +54,7 @@ func RunTools(toolsValue []any) ([]ToolResult, error) {
 
 	toolJobChannel := make(chan ToolResult, len(jobs))
 	for _, job := range jobs {
-		go runtooljob(job.index, job.tool, job.toolCallID, job.function, toolJobChannel)
+		go runtooljob(ctx, job.index, job.tool, job.toolCallID, job.function, toolJobChannel)
 	}
 
 	results := make([]ToolResult, len(jobs))
@@ -72,13 +73,13 @@ type ToolResult struct {
 }
 
 // 内部函数，多线程调用
-func runtooljob(index int, tool ToolFunc, toolCallID string, function map[string]any, toolJobChannel chan<- ToolResult) {
+func runtooljob(ctx context.Context, index int, tool ToolFunc, toolCallID string, function map[string]any, toolJobChannel chan<- ToolResult) {
 	result := ToolResult{
 		index:      index,
 		Role:       "tool",
 		ToolCallID: toolCallID,
 	}
-	output, err := tool.Function([]any{function})
+	output, err := tool.Function(ctx, []any{function})
 	if err != nil {
 		result.Content = fmt.Errorf("run tool %q for call %q: %w", tool.Name, toolCallID, err).Error()
 	} else {

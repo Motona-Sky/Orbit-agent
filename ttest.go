@@ -3,7 +3,7 @@ package main
 import (
 	"context"
 	"fmt"
-	"looporbit/internal/mcp"
+	"orbit/internal/mcp"
 )
 
 func main() {

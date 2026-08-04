@@ -5,9 +5,9 @@ import (
 	"sort"
 	"strings"
 
-	"looporbit/internal/config"
-	"looporbit/internal/i18n"
-	"looporbit/internal/style"
+	"orbit/internal/config"
+	"orbit/internal/i18n"
+	"orbit/internal/style"
 
 	"github.com/charmbracelet/bubbles/textinput"
 	tea "github.com/charmbracelet/bubbletea"

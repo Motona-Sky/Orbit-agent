@@ -6,11 +6,12 @@ import (
 )
 
 const (
-	// AppConfigFileName 是 LoopOrbit 当前使用的 YAML 配置文件名。
+	// AppConfigFileName 是 Orbit 当前使用的 YAML 配置文件名。
 	AppConfigFileName = "Orbitconfig.yaml"
 
 	// AppConfigPathEnv 只用于测试或显式覆盖配置文件位置，避免测试写入真实用户目录。
-	AppConfigPathEnv = "LOOPORBIT_CONFIG_PATH"
+	AppConfigPathEnv       = "ORBIT_CONFIG_PATH"
+	LegacyAppConfigPathEnv = "LOOPORBIT_CONFIG_PATH"
 )
 
 // AppConfig 是持久化到 YAML 的最小应用配置。
@@ -35,6 +36,9 @@ type ProviderConfig struct {
 // GetAppConfigPath 返回 YAML 配置文件路径，优先使用环境变量覆盖。
 func GetAppConfigPath() (string, error) {
 	if path := os.Getenv(AppConfigPathEnv); path != "" {
+		return path, nil
+	}
+	if path := os.Getenv(LegacyAppConfigPathEnv); path != "" {
 		return path, nil
 	}
 	return filepath.Join(ConfigPath, AppConfigFileName), nil

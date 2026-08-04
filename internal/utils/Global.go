@@ -1,7 +1,7 @@
 package utils
 
 import (
-	"looporbit/internal/config"
+	"orbit/internal/config"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -44,7 +44,7 @@ func GInit() {
 		Provider = providerConfig.Type
 		mustReloadThinkLevelConfig()
 		config.Cwd = Cwd
-		ProejctConfigPath = filepath.Join(Cwd, ".looporbit")
+		ProejctConfigPath = filepath.Join(Cwd, ".orbit")
 		config.ProejctConfigPath = ProejctConfigPath
 		UserPath, _ = config.GetUserHomePath()
 		OS = runtime.GOOS
