@@ -2,6 +2,7 @@ package agentui
 
 import (
 	"errors"
+	"orbit/internal/debug"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -49,6 +50,18 @@ type ResultEvent struct {
 }
 
 func (ResultEvent) agentUIEvent() {}
+
+type StreamResultEvent struct {
+	Text string
+}
+
+func (StreamResultEvent) agentUIEvent() {}
+
+type StreamResultDoneEvent struct {
+	Text string
+}
+
+func (StreamResultDoneEvent) agentUIEvent() {}
 
 type FinalResultEvent struct {
 	Text string
@@ -169,6 +182,16 @@ func (ui *AgentUI) DisplayResult(text string) error {
 	return ui.send(ResultEvent{Text: text})
 }
 
+// DisplayStreamResult 将当前流式回答快照发送给 TUI，后续调用更新同一条消息。
+func (ui *AgentUI) DisplayStreamResult(text string) error {
+	return ui.send(StreamResultEvent{Text: text})
+}
+
+// FinishStreamResult 结束当前流式回答，但不结束 Agent 工具调用循环。
+func (ui *AgentUI) FinishStreamResult(text string) error {
+	return ui.send(StreamResultDoneEvent{Text: text})
+}
+
 // DisplayFinalResult 将本轮 Agent 的最终回答发送给 TUI，并结束本轮。
 func (ui *AgentUI) DisplayFinalResult(text string) error {
 	return ui.send(FinalResultEvent{Text: text})
@@ -229,6 +252,7 @@ func (ui *AgentUI) DisplayUsage(stats UsageStats) error {
 	return ui.send(UsageEvent{Stats: stats})
 }
 func (ui *AgentUI) send(event Event) error {
+	debug.Record("agent_ui", debugEvent(event))
 	if ui.closed.Load() {
 		return ErrClosed
 	}
@@ -246,5 +270,42 @@ func (ui *AgentUI) send(event Event) error {
 			return ErrClosed
 		}
 		return nil
+	}
+}
+
+func debugEvent(event Event) any {
+	if question, ok := event.(*QuestionEvent); ok {
+		return struct {
+			Type     string   `json:"type"`
+			Question string   `json:"question"`
+			Options  []string `json:"options"`
+		}{Type: "question", Question: question.Question, Options: question.Options}
+	}
+	return struct {
+		Type  string `json:"type"`
+		Event Event  `json:"event"`
+	}{Type: eventType(event), Event: event}
+}
+
+func eventType(event Event) string {
+	switch event.(type) {
+	case ResultEvent:
+		return "result"
+	case StreamResultEvent:
+		return "stream_result"
+	case StreamResultDoneEvent:
+		return "stream_result_done"
+	case FinalResultEvent:
+		return "final_result"
+	case ThinkingEvent:
+		return "thinking"
+	case ActivityEvent:
+		return "activity"
+	case TaskPlanEvent:
+		return "task_plan"
+	case UsageEvent:
+		return "usage"
+	default:
+		return "unknown"
 	}
 }

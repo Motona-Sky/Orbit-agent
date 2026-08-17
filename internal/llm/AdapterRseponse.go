@@ -22,27 +22,37 @@ type openAIResponsesTool struct {
 }
 
 type OpenaiResponse struct {
-	Model           string                    `json:"model"`
-	Instructions    string                    `json:"instructions,omitempty"`
-	Input           []any                     `json:"input"`
-	MaxOutputTokens int                       `json:"max_output_tokens"`
-	Stream          bool                      `json:"stream"`
-	Temperature     float64                   `json:"temperature"`
-	TopP            float64                   `json:"top_p"`
-	Text            openAIResponsesText       `json:"text"`
-	Reasoning       *openAIResponsesReasoning `json:"reasoning,omitempty"`
-	Tools           []openAIResponsesTool     `json:"tools,omitempty"`
-	ToolChoice      string                    `json:"tool_choice,omitempty"`
+	Model             string                    `json:"model"`
+	Instructions      string                    `json:"instructions,omitempty"`
+	Input             []any                     `json:"input"`
+	Stream            bool                      `json:"stream"`
+	Store             *bool                     `json:"store,omitempty"`
+	ParallelToolCalls *bool                     `json:"parallel_tool_calls,omitempty"`
+	Include           []string                  `json:"include,omitempty"`
+	MaxOutputTokens   *int                      `json:"max_output_tokens,omitempty"`
+	Temperature       *float64                  `json:"temperature,omitempty"`
+	TopP              *float64                  `json:"top_p,omitempty"`
+	Text              openAIResponsesText       `json:"text"`
+	Reasoning         *openAIResponsesReasoning `json:"reasoning,omitempty"`
+	Tools             []openAIResponsesTool     `json:"tools,omitempty"`
+	ToolChoice        string                    `json:"tool_choice,omitempty"`
 }
 
-func buildOpenAIResponsesInput(userInput string, memory []MemoryMessage) []any {
+func buildOpenAIResponsesInput(userInput string, memory []MemoryMessage, systemRole string) []any {
 	input := make([]any, 0, len(memory)+1)
 	for _, message := range memory {
+		if len(message.ResponseItems) > 0 {
+			input = append(input, message.ResponseItems...)
+		}
+		role := message.Role
+		if role == "system" && systemRole != "" {
+			role = systemRole
+		}
 		switch {
 		case len(message.ToolCalls) > 0:
 			if message.Content != "" {
 				input = append(input, map[string]any{
-					"role":    message.Role,
+					"role":    role,
 					"content": message.Content,
 				})
 			}
@@ -70,7 +80,7 @@ func buildOpenAIResponsesInput(userInput string, memory []MemoryMessage) []any {
 			})
 		default:
 			input = append(input, map[string]any{
-				"role":    message.Role,
+				"role":    role,
 				"content": message.Content,
 			})
 		}
@@ -106,16 +116,32 @@ func buildOpenAIResponseRequest(req GenReqJsonPvRequest, registeredTools []tools
 	if req.UserInput != "" {
 		memory = append(memory, MemoryMessage{Role: "user", Content: req.UserInput})
 	}
+	systemRole := ""
+	if req.Provider == "oauth:codex" {
+		systemRole = "developer"
+	}
 	request := OpenaiResponse{
-		Model:           req.Model,
-		Instructions:    req.SystemPrompt,
-		Input:           buildOpenAIResponsesInput(req.UserInput, req.Memory),
-		MaxOutputTokens: 4096,
-		Temperature:     1,
-		TopP:            1,
+		Model:        req.Model,
+		Instructions: req.SystemPrompt,
+		Input:        buildOpenAIResponsesInput(req.UserInput, req.Memory, systemRole),
+		Stream:       true,
 		Text: openAIResponsesText{
 			Format: openAIResponsesTextFormat{Type: "text"},
 		},
+	}
+	if req.Provider == "oauth:codex" {
+		store := false
+		parallelToolCalls := true
+		request.Store = &store
+		request.ParallelToolCalls = &parallelToolCalls
+		request.Include = []string{"reasoning.encrypted_content"}
+	} else {
+		maxOutputTokens := 4096
+		temperature := 1.0
+		topP := 1.0
+		request.MaxOutputTokens = &maxOutputTokens
+		request.Temperature = &temperature
+		request.TopP = &topP
 	}
 	if req.ThinkLevel != "" {
 		request.Reasoning = &openAIResponsesReasoning{Effort: req.ThinkLevel}

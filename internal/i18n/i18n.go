@@ -183,6 +183,33 @@ type EffortSetupMessages struct {
 // ProviderSetupMessages 是模型提供商配置 TUI 的文案结构。
 type ProviderSetupMessages struct {
 	Title                    string
+	AuthSubtitle             string
+	AuthDescription          string
+	OAuthSubtitle            string
+	OAuthDescription         string
+	CodexAuthSubtitle        string
+	CodexAuthDescription     string
+	APIKeyAuthOption         string
+	OAuthAuthOption          string
+	CodexOption              string
+	CodexProviderOption      string
+	CodexImportOption        string
+	CodexLoginOption         string
+	CodexAuthLoading         string
+	CodexNameSubtitle        string
+	CodexNameDescription     string
+	CodexNamePlaceholder     string
+	CodexNameRequiredError   string
+	CodexNameReservedError   string
+	OAuthDetailsSubtitle     string
+	OAuthDetailsDescription  string
+	OAuthAccountLabel        string
+	OAuthUserLabel           string
+	OAuthWorkspaceLabel      string
+	OAuthSelectProvider      string
+	OAuthReauthenticate      string
+	OAuthDeleteProvider      string
+	OAuthDeleteError         string
 	SelectSubtitle           string
 	SelectDescription        string
 	NameSubtitle             string

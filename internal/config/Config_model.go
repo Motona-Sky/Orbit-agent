@@ -25,22 +25,36 @@ func GetModelList() ([]string, error) {
 		return nil, err
 	}
 	baseURL := strings.TrimRight(provider.BaseURL, "/")
+	credential := provider.ApiKey
+	if provider.Auth == "codex" && strings.TrimSpace(credential) == "" {
+		credential = provider.AccessToken
+	}
 	request := req.C().SetTimeout(15 * time.Second).R()
 	modelURL := baseURL + "/models"
 	switch {
 	case provider.Name == "gemini":
-		request.SetQueryParam("key", provider.ApiKey)
+		request.SetQueryParam("key", credential)
 	case provider.Type == "anthropic:messages":
 		if !strings.HasSuffix(baseURL, "/v1") {
 			modelURL = baseURL + "/v1/models"
 		}
-		request.SetHeader("x-api-key", provider.ApiKey).
+		request.SetHeader("x-api-key", credential).
 			SetHeader("anthropic-version", "2023-06-01")
+	case provider.Auth == "codex":
+		modelURL = baseURL + "/codex/models"
+		request.SetQueryParam("client_version", "0.144.1").
+			SetHeader("Authorization", "Bearer "+credential).
+			SetHeader("Accept", "application/json").
+			SetHeader("Originator", "codex_cli_rs").
+			SetHeader("User-Agent", "codex_cli_rs/0.144.1")
+		if strings.TrimSpace(provider.AccountID) != "" {
+			request.SetHeader("ChatGPT-Account-Id", provider.AccountID)
+		}
 	default:
 		if !strings.HasSuffix(baseURL, "/v1") {
 			modelURL = baseURL + "/v1/models"
 		}
-		request.SetHeader("Authorization", "Bearer "+provider.ApiKey)
+		request.SetHeader("Authorization", "Bearer "+credential)
 	}
 
 	resp, err := request.Get(modelURL)

@@ -6,6 +6,7 @@ import (
 	"os"
 
 	"orbit/internal/config"
+	"orbit/internal/debug"
 	"orbit/internal/memorys"
 )
 
@@ -14,6 +15,7 @@ type runDependencies struct {
 	openSession   func() error
 	createConfig  func() error
 	runModelSetup func() error
+	enableDebug   func()
 }
 
 type sessionFlowDependencies struct {
@@ -30,11 +32,24 @@ func Run(args []string) int {
 		openSession:   func() error { return openSessionFlow(defaultSessionFlowDependencies()) },
 		createConfig:  CreateConfig,
 		runModelSetup: runModelSetupCommand,
+		enableDebug:   debug.Enable,
 	})
 }
 
 // runWithDependencies 使用注入的依赖分派命令，统一输出错误并转换为退出状态码。
 func runWithDependencies(args []string, deps runDependencies) int {
+	filteredArgs := make([]string, 0, len(args))
+	for _, arg := range args {
+		if arg == "--debug" {
+			if deps.enableDebug != nil {
+				deps.enableDebug()
+			}
+			continue
+		}
+		filteredArgs = append(filteredArgs, arg)
+	}
+	args = filteredArgs
+
 	var err error
 	switch {
 	case len(args) == 0:

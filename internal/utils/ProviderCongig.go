@@ -13,6 +13,10 @@ func ReloadProviderConfig() error {
 		return err
 	}
 	ApiKey = providerConfig.ApiKey
+	Auth = providerConfig.Auth
+	AccessToken = providerConfig.AccessToken
+	RefreshToken = providerConfig.RefreshToken
+	AccountID = providerConfig.AccountID
 	BaseUrl = providerConfig.BaseURL
 	Model = providerConfig.Model
 	Provider = providerConfig.Type

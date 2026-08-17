@@ -4,6 +4,7 @@ import (
 	"crypto/rand"
 	"crypto/sha256"
 	"encoding/hex"
+	"orbit/internal/debug"
 	"orbit/internal/utils"
 )
 
@@ -49,5 +50,8 @@ func setChatTuiEvent(pwd, sessionID string) SessionId {
 	chatTuiInit = SessionId{Pwd: pwd, SessionId: sessionID}
 	utils.SessionId = sessionID
 	utils.Cwd = pwd
+	if err := debug.StartSession(pwd, sessionID); err != nil {
+		panic("start debug session: " + err.Error())
+	}
 	return chatTuiInit
 }

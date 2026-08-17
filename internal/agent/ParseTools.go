@@ -77,7 +77,7 @@ func ParseResponse(req string, jsonstr string) ([]any, []llm.MemoryMessage, map[
 			return nil, nil, usage, errors.New("response tool_calls format is invalid")
 		}
 		return toolCalls, mem, usage, nil
-	case "openai:response", "openai:responses":
+	case "openai:response", "openai:responses", "oauth:codex":
 		response, err := ParseResponseJSON(jsonstr)
 		if err != nil {
 			return nil, nil, nil, err
@@ -93,6 +93,8 @@ func ParseResponse(req string, jsonstr string) ([]any, []llm.MemoryMessage, map[
 
 		toolCalls := make([]any, 0)
 		textParts := make([]string, 0)
+		reasoningParts := make([]string, 0)
+		responseItems := make([]any, 0)
 		for _, value := range output {
 			item, ok := value.(map[string]any)
 			if !ok {
@@ -114,6 +116,18 @@ func ParseResponse(req string, jsonstr string) ([]any, []llm.MemoryMessage, map[
 						if text, ok := contentItem["text"].(string); ok {
 							textParts = append(textParts, text)
 						}
+					}
+				}
+			case "reasoning":
+				responseItems = append(responseItems, item)
+				summary, _ := item["summary"].([]any)
+				for _, summaryValue := range summary {
+					summaryItem, ok := summaryValue.(map[string]any)
+					if !ok {
+						continue
+					}
+					if text, ok := summaryItem["text"].(string); ok {
+						reasoningParts = append(reasoningParts, text)
 					}
 				}
 			case "function_call":
@@ -140,9 +154,11 @@ func ParseResponse(req string, jsonstr string) ([]any, []llm.MemoryMessage, map[
 		}
 
 		message := llm.MemoryMessage{
-			Role:      "assistant",
-			Content:   strings.Join(textParts, ""),
-			ToolCalls: toolCalls,
+			Role:             "assistant",
+			Content:          strings.Join(textParts, ""),
+			ReasoningContent: strings.Join(reasoningParts, "\n"),
+			ToolCalls:        toolCalls,
+			ResponseItems:    responseItems,
 		}
 		return toolCalls, []llm.MemoryMessage{message}, usage, nil
 	case "anthropic:messages":

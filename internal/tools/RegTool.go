@@ -227,7 +227,7 @@ func GetAllTool(provider string) []ToolReg {
 		return result
 	case "anthropic:messages":
 		return nil
-	case "openai:responses":
+	case "openai:responses", "oauth:codex":
 		for _, t := range registeredTools {
 			if toolAllowed(t.Function.Name, disabledTools) {
 				result = append(result, t)

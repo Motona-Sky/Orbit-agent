@@ -7,13 +7,13 @@ import (
 	"fmt"
 	"orbit/internal/agentui"
 	"orbit/internal/billing"
-	"orbit/internal/i18n"
+	"orbit/internal/debug"
 	"orbit/internal/llm"
 	"orbit/internal/memorys"
+	"orbit/internal/oauth"
 	"orbit/internal/tools"
 	"orbit/internal/utils"
 	"os"
-	"strconv"
 	"strings"
 	"time"
 )
@@ -21,6 +21,9 @@ import (
 type RunAgentValue struct {
 	Provider      string
 	ApiKey        string
+	Auth          string
+	AccessToken   string
+	AccountID     string
 	BaseUrl       string
 	Model         string
 	SystemPt      string
@@ -46,8 +49,26 @@ func RunAgent(ctx context.Context, agentvalue RunAgentValue, ui *agentui.AgentUI
 	if agentvalue.Provider == "" {
 		return errors.New("no provider")
 	}
-	if agentvalue.ApiKey == "" {
-		return errors.New("no apikey")
+	credential := agentvalue.ApiKey
+	if agentvalue.Auth == "codex" {
+		credential = agentvalue.AccessToken
+	}
+	if credential == "" {
+		return errors.New("no credential")
+	}
+	if agentvalue.Auth == "codex" {
+		usable, err := oauth.ParseAccessToken(credential)
+		if err != nil {
+			return fmt.Errorf("check codex access token: %w", err)
+		}
+		if !usable {
+			refreshErr, accessToken := oauth.RefreshTokens()
+			if refreshErr != nil {
+				return fmt.Errorf("refresh codex access token: %w", refreshErr)
+			}
+			credential = accessToken
+			agentvalue.AccountID = utils.AccountID
+		}
 	}
 
 	if agentvalue.BaseUrl == "" {
@@ -63,12 +84,23 @@ func RunAgent(ctx context.Context, agentvalue RunAgentValue, ui *agentui.AgentUI
 	var AgentiterNum int = 0
 	var RetryNum int = 5
 	SessionId := utils.SessionId
+	debug.Record("agent_start", map[string]any{
+		"provider":       agentvalue.Provider,
+		"model":          agentvalue.Model,
+		"base_url":       agentvalue.BaseUrl,
+		"auth":           agentvalue.Auth,
+		"system_prompt":  agentvalue.SystemPt,
+		"user_input":     agentvalue.UserInput,
+		"think_level":    agentvalue.ThinkLevel,
+		"resume_session": agentvalue.ResumeSession,
+	})
 	// 加载记忆
 	loadedMemory, err := loadAgentMemory(SessionId, agentvalue.ResumeSession)
 	if err != nil {
 		return err
 	}
 	req.Memory = loadedMemory
+	debug.Record("loaded_memory", loadedMemory)
 
 	// 计算上下文长度
 	contextLength = estimateMemoryTokens(loadedMemory)
@@ -102,37 +134,79 @@ func RunAgent(ctx context.Context, agentvalue RunAgentValue, ui *agentui.AgentUI
 		if err != nil {
 			return fmt.Errorf("gen req json pv err: %w", err)
 		}
+		debug.Record("llm_request", map[string]any{"iteration": AgentiterNum, "body": data})
 		req.Memory = inputMemory
 		// 清空SystemPrompt和UserInput
 		req.SystemPrompt = ""
 		req.UserInput = ""
-		responseJSON, err := requestProviderWithRetry(
-			RetryNum,
-			func() (error, string) {
-				return llm.RequProvider(agentvalue.ApiKey, agentvalue.BaseUrl, agentvalue.Provider, data)
-			},
-			time.Sleep,
-			func(requestErr error, attempt int, maxAttempts int) {
-				_ = ui.DisplayThinking(
-					i18n.For(i18n.DefaultLanguage).Messages.OtherActivity.RetryLabel +
-						requestErr.Error() + strconv.Itoa(attempt) + "/" + strconv.Itoa(maxAttempts),
-				)
-			},
-		)
-		if err != nil {
-			return err
+		var responseJSON string
+		streamedText := ""
+		streamedReasoning := ""
+		streamedToolCalls := make(map[string]struct{})
+		for attempt := 1; attempt <= RetryNum; attempt++ {
+			var requestErr error
+			if agentvalue.Auth == "codex" {
+				requestErr, responseJSON = llm.RequOuthStream(ctx, credential, agentvalue.AccountID, agentvalue.Provider, data, func(event llm.CodexStreamEvent) error {
+					switch event.Type {
+					case "response.output_text.delta":
+						streamedText += event.Delta
+						return ui.DisplayStreamResult(streamedText)
+					case "response.reasoning_summary_text.delta":
+						streamedReasoning += event.Delta
+						return ui.DisplayThinking(streamedReasoning)
+					case "response.output_item.done":
+						if event.Item["type"] != "function_call" {
+							return nil
+						}
+						callID, _ := event.Item["call_id"].(string)
+						if _, shown := streamedToolCalls[callID]; shown {
+							return nil
+						}
+						streamedToolCalls[callID] = struct{}{}
+						return ui.DisplayActivity(agentui.ActivityTool, toolActivityFromResponseItem(event.Item))
+					}
+					return nil
+				})
+			} else {
+				requestErr, responseJSON = llm.RequProvider(credential, agentvalue.BaseUrl, agentvalue.Provider, data)
+			}
+			if requestErr == nil {
+				debug.Record("llm_response", map[string]any{"iteration": AgentiterNum, "attempt": attempt, "body": responseJSON})
+				break
+			}
+			debug.Record("llm_request_error", map[string]any{"iteration": AgentiterNum, "attempt": attempt, "error": requestErr.Error()})
+			if errors.Is(requestErr, context.Canceled) {
+				return requestErr
+			}
+			ui.DisplayResult(data)
+			var statusErr *llm.HTTPStatusError
+			if errors.As(requestErr, &statusErr) {
+				return ui.DisplayFinalResult(fmt.Sprintf("HTTP %d: %s", statusErr.StatusCode, statusErr.Status))
+			}
+
+			if attempt == RetryNum {
+				return ui.DisplayResult(fmt.Sprintf("request provider failed after %d attempts: %s", RetryNum, requestErr.Error()))
+			}
+			ui.DisplayThinking(fmt.Sprintf("try %d   %s", attempt, requestErr.Error()))
+			time.Sleep(10 * time.Second)
 		}
 		// 解析响应
 		toolCalls, assistantMemory, usage, err := ParseResponse(req.Provider, responseJSON)
 		if err != nil {
-			return fmt.Errorf("get tool calls json err: %w", err)
+			return ui.DisplayResult(err.Error())
+		}
+		debug.Record("parsed_response", map[string]any{"iteration": AgentiterNum, "tool_calls": toolCalls, "assistant_memory": assistantMemory, "usage": usage})
+		if len(assistantMemory) > 0 && strings.TrimSpace(assistantMemory[0].ReasoningContent) != "" {
+			if err := ui.DisplayThinking(assistantMemory[0].ReasoningContent); err != nil {
+				return ui.DisplayResult(err.Error())
+			}
 		}
 		// 存储每日token消耗
 		dailyUsage, usageErr := billing.InsertCostData(SessionId, usage)
 		//上下文长度
 		contextLength = GetConLength(req.Provider, usage)
 		if err := publishDailyUsage(ui, dailyUsage, usageErr); err != nil {
-			return err
+			return ui.DisplayResult(err.Error())
 		}
 		memory = inputMemory
 		memory = memorys.AppendMemoryMessages(memory, assistantMemory)
@@ -140,7 +214,13 @@ func RunAgent(ctx context.Context, agentvalue RunAgentValue, ui *agentui.AgentUI
 		if len(toolCalls) == 0 {
 			//结束循环
 			if len(assistantMemory) == 0 {
-				return errors.New("final assistant message is empty")
+				return ui.DisplayResult("final assistant message is empty")
+			}
+			finalContent := assistantMemory[0].Content
+			if strings.TrimSpace(finalContent) == "" {
+				finalContent = streamedText
+				assistantMemory[0].Content = finalContent
+				memory[len(memory)-1].Content = finalContent
 			}
 			jsonMemory, err := json.Marshal(memory)
 			if err != nil {
@@ -150,15 +230,29 @@ func RunAgent(ctx context.Context, agentvalue RunAgentValue, ui *agentui.AgentUI
 			if err := memorys.SaveChatHistory(jsonMemory, SessionId); err != nil {
 				memorys.CreateSessionFolder()
 			}
-			return ui.DisplayFinalResult(assistantMemory[0].Content)
+			debug.Record("saved_memory", memory)
+			if streamedText != "" {
+				if err := ui.FinishStreamResult(finalContent); err != nil {
+					return err
+				}
+			}
+			return ui.DisplayFinalResult(finalContent)
 		}
-		if content := strings.TrimSpace(assistantMemory[0].Content); content != "" {
+		if streamedText != "" {
+			if err := ui.FinishStreamResult(assistantMemory[0].Content); err != nil {
+				return err
+			}
+		} else if content := strings.TrimSpace(assistantMemory[0].Content); content != "" {
 			if err := ui.DisplayResult(assistantMemory[0].Content); err != nil {
 				return err
 			}
 		}
-		// 显示工具调用
+		// 显示未通过流式事件发布的工具调用
 		for _, toolCall := range toolCalls {
+			callID := toolCallID(toolCall)
+			if _, shown := streamedToolCalls[callID]; shown {
+				continue
+			}
 			target := toolActivityFromCall(toolCall)
 			if err := ui.DisplayActivity(agentui.ActivityTool, target); err != nil {
 				return err
@@ -168,6 +262,7 @@ func RunAgent(ctx context.Context, agentvalue RunAgentValue, ui *agentui.AgentUI
 		if err != nil {
 			return fmt.Errorf("run tools err: %w", err)
 		}
+		debug.Record("tool_results", map[string]any{"iteration": AgentiterNum, "calls": toolCalls, "results": toolResults})
 		toolMemory := llm.GettoolCallMemory(toolResults)
 		memory = memorys.AppendMemoryMessages(memory, toolMemory)
 		req.Memory = memory
@@ -209,6 +304,19 @@ func publishDailyUsage(ui *agentui.AgentUI, usage billing.DailyUsage, usageErr e
 	})
 }
 
+func toolActivityFromResponseItem(item map[string]any) string {
+	return toolActivityTarget(item["name"], item["arguments"])
+}
+
+func toolCallID(call any) string {
+	value, ok := call.(map[string]any)
+	if !ok {
+		return ""
+	}
+	callID, _ := value["id"].(string)
+	return callID
+}
+
 // 显示工具
 func toolActivityFromCall(call any) string {
 	value, ok := call.(map[string]any)
@@ -219,9 +327,12 @@ func toolActivityFromCall(call any) string {
 	if !ok {
 		return "unknown"
 	}
-	name, _ := function["name"].(string)
+	return toolActivityTarget(function["name"], function["arguments"])
+}
 
-	rawArguments, _ := function["arguments"].(string)
+func toolActivityTarget(nameValue, argumentsValue any) string {
+	name, _ := nameValue.(string)
+	rawArguments, _ := argumentsValue.(string)
 	var args map[string]any
 	if rawArguments != "" {
 		_ = json.Unmarshal([]byte(rawArguments), &args)
