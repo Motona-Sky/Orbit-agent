@@ -14,7 +14,7 @@ func GetConLength(provider string, usage map[string]any) float64 {
 	case "openai:completions":
 		conlen := usage["prompt_tokens"].(float64)
 		return conlen
-	case "openai:response", "openai:responses":
+	case "openai:response", "openai:responses", "oauth:codex":
 		conlen := usage["input_tokens"].(float64)
 		return conlen
 	}

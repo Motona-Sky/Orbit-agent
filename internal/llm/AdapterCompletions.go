@@ -5,9 +5,19 @@ import (
 	"errors"
 	"fmt"
 	"orbit/internal/tools"
+	"time"
 
 	"github.com/imroc/req/v3"
 )
+
+type HTTPStatusError struct {
+	StatusCode int
+	Status     string
+}
+
+func (e *HTTPStatusError) Error() string {
+	return fmt.Sprintf("request failed: %s", e.Status)
+}
 
 // RequProvider 根据供应商类型发送 HTTP 请求。
 func RequProvider(apikey string, baseurl string, provider string, data string) (error, string) {
@@ -15,9 +25,10 @@ func RequProvider(apikey string, baseurl string, provider string, data string) (
 	case provider == "openai:completions":
 		// OpenAI Completion
 		client := req.C()
-		resp, err := client.R().
+		resp, err := client.SetTimeout(30*time.Second).R().
 			SetHeader("Content-Type", "application/json").
 			SetHeaders(map[string]string{ // 一次设置多个请求头。
+
 				"Authorization": "Bearer " + apikey,
 			}).
 			SetBody(data).
@@ -26,12 +37,12 @@ func RequProvider(apikey string, baseurl string, provider string, data string) (
 			return err, ""
 		}
 		if !resp.IsSuccessState() {
-			return errors.New("request failed: " + resp.Status), ""
+			return &HTTPStatusError{StatusCode: resp.StatusCode, Status: resp.Status}, ""
 		}
 		return nil, resp.String()
 	case provider == "openai:responses":
 		client := req.C()
-		resp, err := client.R().
+		resp, err := client.SetTimeout(30*time.Second).R().
 			SetHeader("Content-Type", "application/json").
 			SetHeader("Authorization", "Bearer "+apikey).
 			SetBody(data).
@@ -40,7 +51,7 @@ func RequProvider(apikey string, baseurl string, provider string, data string) (
 			return err, ""
 		}
 		if !resp.IsSuccessState() {
-			return errors.New("request failed: " + resp.Status), ""
+			return &HTTPStatusError{StatusCode: resp.StatusCode, Status: resp.Status}, ""
 		}
 		return nil, resp.String()
 	case provider == "anthropic:messages":
@@ -58,6 +69,7 @@ type MemoryMessage struct {
 	ReasoningContent string `json:"reasoning_content,omitempty"`
 	ToolCalls        []any  `json:"tool_calls,omitempty"`
 	ToolCallID       string `json:"tool_call_id,omitempty"`
+	ResponseItems    []any  `json:"response_items,omitempty"`
 }
 
 type openAIThinking struct {
@@ -151,7 +163,7 @@ func GenReqJsonPv(req GenReqJsonPvRequest, tools []tools.ToolReg) ([]MemoryMessa
 		return request.Messages, string(data), nil
 	case "anthropic:messages":
 		return nil, "anthropic", errors.New("no anthropic")
-	case "openai:responses":
+	case "openai:responses", "oauth:codex":
 		request, memory := buildOpenAIResponseRequest(req, tools)
 		data, err := json.Marshal(request)
 		if err != nil {

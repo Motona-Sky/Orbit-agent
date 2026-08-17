@@ -28,6 +28,9 @@ func runAgentValueForEvent(chatmessages TuiEvent) agent.RunAgentValue {
 	return agent.RunAgentValue{
 		Provider:      utils.Provider,
 		ApiKey:        utils.ApiKey,
+		Auth:          utils.Auth,
+		AccessToken:   utils.AccessToken,
+		AccountID:     utils.AccountID,
 		ThinkLevel:    chatmessages.ThinkLevel,
 		Model:         utils.Model,
 		BaseUrl:       utils.BaseUrl,

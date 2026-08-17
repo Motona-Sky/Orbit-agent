@@ -13,6 +13,10 @@ var (
 	ChatHistoryFolder string
 	SessionId         string
 	ApiKey            string
+	Auth              string
+	AccessToken       string
+	AccountID         string
+	RefreshToken      string
 	BaseUrl           string
 	Model             string
 	Provider          string
@@ -39,6 +43,10 @@ func GInit() {
 			os.Remove(ConfigFolderPath)
 		}
 		ApiKey = providerConfig.ApiKey
+		Auth = providerConfig.Auth
+		AccessToken = providerConfig.AccessToken
+		AccountID = providerConfig.AccountID
+		RefreshToken = providerConfig.RefreshToken
 		BaseUrl = providerConfig.BaseURL
 		Model = providerConfig.Model
 		Provider = providerConfig.Type

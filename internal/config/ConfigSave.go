@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"go.yaml.in/yaml/v3"
 )
@@ -12,6 +13,12 @@ import (
 // SaveAppConfig 将应用配置写入 YAML 文件，并确保配置目录存在。
 func SaveAppConfig(appConfig AppConfig) error {
 	appConfig.ThinkLevel = NormalizeThinkLevel(appConfig.ThinkLevel)
+	for name, providerConfig := range appConfig.Providers {
+		if providerConfig.Auth == "" {
+			providerConfig.Auth = "apikey"
+			appConfig.Providers[name] = providerConfig
+		}
+	}
 	path, err := GetAppConfigPath()
 	if err != nil {
 		return err
@@ -68,9 +75,67 @@ func SaveProviderConfig(providerConfig ProviderConfig) error {
 	if appConfig.Providers == nil {
 		appConfig.Providers = make(map[string]ProviderConfig)
 	}
-	providerConfig.DefaultModel = providerConfig.Model
+	if providerConfig.Auth == "" {
+		providerConfig.Auth = "apikey"
+	}
+	if providerConfig.Auth == "codex" {
+		if providerConfig.DefaultModel == "" {
+			providerConfig.DefaultModel = providerConfig.Model
+		}
+	} else {
+		providerConfig.DefaultModel = providerConfig.Model
+	}
 	appConfig.Providers[providerConfig.Name] = providerConfig
 	appConfig.DefaultProvider = providerConfig.Name
+	return SaveAppConfig(appConfig)
+}
+
+// UpdateProviderOAuthTokens updates OAuth credentials for one provider without changing the default provider.
+func UpdateProviderOAuthTokens(providerName, accessToken, idToken, refreshToken, accountID string) (ProviderConfig, error) {
+	if strings.TrimSpace(providerName) == "" {
+		return ProviderConfig{}, errors.New("provider name is empty")
+	}
+	if strings.TrimSpace(accessToken) == "" {
+		return ProviderConfig{}, errors.New("access token is empty")
+	}
+
+	appConfig, err := LoadAppConfig()
+	if err != nil {
+		return ProviderConfig{}, err
+	}
+	providerConfig, ok := appConfig.Providers[providerName]
+	if !ok {
+		return ProviderConfig{}, fmt.Errorf("provider %q not found", providerName)
+	}
+
+	providerConfig.AccessToken = accessToken
+	if idToken != "" {
+		providerConfig.IDToken = idToken
+	}
+	if refreshToken != "" {
+		providerConfig.RefreshToken = refreshToken
+	}
+	if accountID != "" {
+		providerConfig.AccountID = accountID
+	}
+	appConfig.Providers[providerName] = providerConfig
+	if err := SaveAppConfig(appConfig); err != nil {
+		return ProviderConfig{}, err
+	}
+	providerConfig.Name = providerName
+	return providerConfig, nil
+}
+
+// DeleteProviderConfig 删除指定模型提供商，并在必要时清空默认提供商。
+func DeleteProviderConfig(providerName string) error {
+	appConfig, err := loadAppConfigOrEmpty()
+	if err != nil {
+		return err
+	}
+	delete(appConfig.Providers, providerName)
+	if appConfig.DefaultProvider == providerName {
+		appConfig.DefaultProvider = ""
+	}
 	return SaveAppConfig(appConfig)
 }
 

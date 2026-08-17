@@ -73,3 +73,30 @@ func TestSessionCommandReturnsFailureOnFlowError(t *testing.T) {
 		t.Fatalf("code=%d", code)
 	}
 }
+
+func TestDebugFlagEnablesDebugAndKeepsCommandRouting(t *testing.T) {
+	for _, args := range [][]string{{"--debug"}, {"--debug", "session"}, {"session", "--debug"}} {
+		debugEnabled := 0
+		chatOpened := 0
+		sessionOpened := 0
+		deps := runDependencies{
+			openChat:      func() error { chatOpened++; return nil },
+			openSession:   func() error { sessionOpened++; return nil },
+			createConfig:  func() error { return nil },
+			runModelSetup: func() error { return nil },
+			enableDebug:   func() { debugEnabled++ },
+		}
+		if code := runWithDependencies(args, deps); code != 0 {
+			t.Fatalf("args=%v code=%d", args, code)
+		}
+		if debugEnabled != 1 {
+			t.Fatalf("args=%v debugEnabled=%d", args, debugEnabled)
+		}
+		if len(args) == 1 && chatOpened != 1 {
+			t.Fatalf("args=%v chatOpened=%d", args, chatOpened)
+		}
+		if len(args) == 2 && sessionOpened != 1 {
+			t.Fatalf("args=%v sessionOpened=%d", args, sessionOpened)
+		}
+	}
+}

@@ -23,13 +23,24 @@ type AppConfig struct {
 }
 
 // ProviderConfig 是模型提供商相关的持久化配置值。
+type OauthUser struct {
+	User      string `yaml:"user,omitempty"`
+	Workspace string `yaml:"workspace,omitempty"`
+}
+
 type ProviderConfig struct {
-	Name         string `yaml:"-"`
-	ApiKey       string `yaml:"api_key"`
-	BaseURL      string `yaml:"base_url"`
-	Model        string `yaml:"model"`
-	Type         string `yaml:"type"`
-	DefaultModel string `yaml:"default_model"`
+	Name         string     `yaml:"-"`
+	Auth         string     `yaml:"auth"`
+	ApiKey       string     `yaml:"api_key,omitempty"`
+	BaseURL      string     `yaml:"base_url,omitempty"`
+	Model        string     `yaml:"model,omitempty"`
+	Type         string     `yaml:"type,omitempty"`
+	DefaultModel string     `yaml:"default_model"`
+	IDToken      string     `yaml:"Id_token,omitempty"`
+	AccessToken  string     `yaml:"AccessToken,omitempty"`
+	RefreshToken string     `yaml:"Refresh_token,omitempty"`
+	AccountID    string     `yaml:"Account_id,omitempty"`
+	User         *OauthUser `yaml:"User,omitempty"`
 }
 
 // GetAppConfigPath 返回 YAML 配置文件路径，优先使用环境变量覆盖。

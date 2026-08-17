@@ -77,6 +77,13 @@ func newOrbitalStyles(styleConfig config.StyleConfig) orbitalStyles {
 	}
 }
 
+func TerminalHyperlink(text, target string) string {
+	if text == "" || target == "" {
+		return text
+	}
+	return "\x1b]8;;" + target + "\x1b\\" + text + "\x1b]8;;\x1b\\"
+}
+
 func RenderOrbitalMenuView(view OrbitalMenuView) string {
 	styles := newOrbitalStyles(view.StyleConfig)
 	width := view.ViewportWidth
@@ -205,11 +212,13 @@ func renderOrbitalPanelWithHeight(copy OrbitalMenuCopy, options []string, cursor
 	innerLines := []string{
 		orbitalPanelBlank(panelWidth, styles),
 		orbitalPanelText(panelWidth, copy.Heading, styles.heading, styles),
-		orbitalPanelText(panelWidth, copy.Subtitle, styles.subtitle, styles),
+	}
+	innerLines = append(innerLines, orbitalPanelTextLines(panelWidth, copy.Subtitle, styles.subtitle, styles)...)
+	innerLines = append(innerLines,
 		orbitalPanelBlank(panelWidth, styles),
 		orbitalPanelDivider(panelWidth, contentWidth, styles),
 		orbitalPanelBlank(panelWidth, styles),
-	}
+	)
 
 	for i, choice := range options {
 		if cursor == i {
@@ -242,9 +251,9 @@ func renderCompactOrbitalPanel(copy OrbitalMenuCopy, options []string, cursor, s
 	innerLines := []string{
 		orbitalPanelBlank(panelWidth, styles),
 		orbitalPanelText(panelWidth, copy.Heading, styles.heading, styles),
-		orbitalPanelText(panelWidth, copy.Subtitle, styles.subtitle, styles),
-		orbitalPanelDivider(panelWidth, contentWidth, styles),
 	}
+	innerLines = append(innerLines, orbitalPanelTextLines(panelWidth, copy.Subtitle, styles.subtitle, styles)...)
+	innerLines = append(innerLines, orbitalPanelDivider(panelWidth, contentWidth, styles))
 
 	for i, choice := range options {
 		label := fmt.Sprintf("%d   %s", sequenceOffset+i+1, choice)
@@ -375,6 +384,17 @@ func orbitalPanelText(width int, text string, textStyle lipgloss.Style, styles o
 	contentWidth := maxInt(width-14, 8)
 	text = truncateCells(text, contentWidth)
 	return orbitalPanelContent(width, textStyle.Render(text), styles)
+}
+
+func orbitalPanelTextLines(width int, text string, textStyle lipgloss.Style, styles orbitalStyles) []string {
+	contentWidth := maxInt(width-14, 8)
+	wrapped := lipgloss.NewStyle().Width(contentWidth).Render(text)
+	lines := strings.Split(wrapped, "\n")
+	result := make([]string, 0, len(lines))
+	for _, line := range lines {
+		result = append(result, orbitalPanelContent(width, textStyle.Render(line), styles))
+	}
+	return result
 }
 
 func orbitalPanelDivider(width, dividerWidth int, styles orbitalStyles) string {

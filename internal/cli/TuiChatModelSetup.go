@@ -149,7 +149,11 @@ func (m model) updateProviderSetup(msg tea.Msg) (tea.Model, tea.Cmd) {
 	}
 	if key, ok := msg.(tea.KeyMsg); ok {
 		if key.String() == "esc" || key.String() == "ctrl+c" ||
-			(key.String() == "q" && m.providerSetup.step == providerStepSelect) {
+			(key.String() == "q" && (m.providerSetup.step == providerStepAuth ||
+				m.providerSetup.step == providerStepCodexAuth ||
+				m.providerSetup.step == providerStepCodexName ||
+				m.providerSetup.step == providerStepOAuthDetails ||
+				m.providerSetup.step == providerStepSelect)) {
 			return m.leaveProviderSetup(nil)
 		}
 	}

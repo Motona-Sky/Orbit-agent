@@ -63,6 +63,7 @@ func (m model) handleAgentUIEvent(msg agentui.Event) (tea.Model, tea.Cmd) {
 	case agentui.ResultEvent:
 		m.clearPendingUserTranscript()
 		m.appendActivitySummary()
+		m.streamingResultIndex = historyCursorIdle
 		m.transcript = append(m.transcript, chatTranscriptEntry{
 			kind:    transcriptMessage,
 			role:    "assistant",
@@ -71,15 +72,51 @@ func (m model) handleAgentUIEvent(msg agentui.Event) (tea.Model, tea.Cmd) {
 		m, transcriptCmd := m.commitTerminalTranscript(nil)
 		return m, sequenceTeaCommands(transcriptCmd, m.waitForNextAgentUIEvent())
 
+	case agentui.StreamResultEvent:
+		m.clearPendingUserTranscript()
+		var transcriptCmd tea.Cmd
+		if m.streamingResultIndex < 0 || m.streamingResultIndex >= len(m.transcript) {
+			m.appendActivitySummary()
+			m, transcriptCmd = m.commitTerminalTranscript(nil)
+			m.transcript = append(m.transcript, chatTranscriptEntry{
+				kind:    transcriptMessage,
+				role:    "assistant",
+				content: msg.Text,
+				pending: true,
+			})
+			m.streamingResultIndex = len(m.transcript) - 1
+		} else {
+			m.transcript[m.streamingResultIndex].content = msg.Text
+		}
+		return m, sequenceTeaCommands(transcriptCmd, m.waitForNextAgentUIEvent())
+
+	case agentui.StreamResultDoneEvent:
+		if m.streamingResultIndex >= 0 && m.streamingResultIndex < len(m.transcript) {
+			entry := &m.transcript[m.streamingResultIndex]
+			entry.content = msg.Text
+			entry.pending = false
+			m.streamingResultIndex = historyCursorIdle
+			m, transcriptCmd := m.commitTerminalTranscript(nil)
+			return m, sequenceTeaCommands(transcriptCmd, m.waitForNextAgentUIEvent())
+		}
+		return m, m.waitForNextAgentUIEvent()
+
 	case agentui.FinalResultEvent:
 		failed := strings.HasPrefix(strings.TrimSpace(msg.Text), m.messages.Chat.AgentErrorLabel)
 		m.clearPendingUserTranscript()
 		m.appendActivitySummary()
-		m.transcript = append(m.transcript, chatTranscriptEntry{
-			kind:    transcriptMessage,
-			role:    "assistant",
-			content: msg.Text,
-		})
+		if m.streamingResultIndex >= 0 && m.streamingResultIndex < len(m.transcript) {
+			entry := &m.transcript[m.streamingResultIndex]
+			entry.content = msg.Text
+			entry.pending = false
+			m.streamingResultIndex = historyCursorIdle
+		} else if len(m.transcript) == 0 || m.transcript[len(m.transcript)-1].role != "assistant" || m.transcript[len(m.transcript)-1].content != msg.Text {
+			m.transcript = append(m.transcript, chatTranscriptEntry{
+				kind:    transcriptMessage,
+				role:    "assistant",
+				content: msg.Text,
+			})
+		}
 		m.appendTaskSummary(failed)
 		m.running = false
 		m.stopRunningStatus()
@@ -125,6 +162,10 @@ func (m *model) closeAgentUI() {
 	if m.activeQuestion >= 0 && m.activeQuestion < len(m.transcript) {
 		m.transcript[m.activeQuestion].pending = false
 		m.activeQuestion = historyCursorIdle
+	}
+	if m.streamingResultIndex >= 0 && m.streamingResultIndex < len(m.transcript) {
+		m.transcript[m.streamingResultIndex].pending = false
+		m.streamingResultIndex = historyCursorIdle
 	}
 	m.clearThinkingText()
 	if m.agentUI == nil {

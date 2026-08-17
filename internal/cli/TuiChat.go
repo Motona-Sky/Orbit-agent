@@ -64,6 +64,7 @@ type model struct {
 	setupScreenReady         bool
 	pendingInput             string
 	activeAgentInput         string
+	streamingResultIndex     int
 	slashMenuCursor          int
 	slashMenuDismissed       bool
 	wantsRestart             bool
@@ -197,13 +198,14 @@ func initialModel(languageCode string) model {
 	composer.Focus()
 
 	m := model{
-		composer:       composer,
-		Pwd:            currentWorkingDirectory(),
-		width:          defaultWidth,
-		messages:       messages,
-		styleConfig:    loadStyleConfigOrDefault(),
-		historyCursor:  historyCursorIdle,
-		activeQuestion: historyCursorIdle,
+		composer:             composer,
+		Pwd:                  currentWorkingDirectory(),
+		width:                defaultWidth,
+		messages:             messages,
+		styleConfig:          loadStyleConfigOrDefault(),
+		historyCursor:        historyCursorIdle,
+		activeQuestion:       historyCursorIdle,
+		streamingResultIndex: historyCursorIdle,
 	}
 	// 加载今日已有的 token 用量（可能来自之前的 session）
 	if usage, err := billing.QueryTodayUsage(); err == nil {
@@ -642,6 +644,13 @@ func (m model) renderShortScreenChat(width, height int) string {
 	}
 	input := fitChatLine(m.messages.Chat.AgentCommandPrompt+" "+value, width)
 	lines := []string{}
+	if m.streamingResultIndex >= 0 && m.streamingResultIndex < len(m.transcript) {
+		entry := m.transcript[m.streamingResultIndex]
+		if entry.pending && strings.TrimSpace(entry.content) != "" {
+			streamLines := clampTerminalLines(m.renderTranscriptEntry(width, entry), width)
+			lines = append(lines, streamLines...)
+		}
+	}
 	if m.activeQuestion >= 0 && m.activeQuestion < len(m.transcript) {
 		entry := m.transcript[m.activeQuestion]
 		if entry.kind == transcriptQuestion && entry.pending {
@@ -690,7 +699,10 @@ func (m model) renderInlineStatus(width int) string {
 			return strings.Join(m.renderQuestion(entry, width), "\n")
 		}
 	}
-	parts := make([]string, 0, 2)
+	parts := make([]string, 0, 3)
+	if streaming := m.renderStreamingResult(width); streaming != "" {
+		parts = append(parts, streaming)
+	}
 	if runtime := m.renderRuntimeActivityTree(width); runtime != "" {
 		parts = append(parts, runtime)
 	}
@@ -698,6 +710,18 @@ func (m model) renderInlineStatus(width int) string {
 		parts = append(parts, pending)
 	}
 	return strings.Join(parts, "\n\n")
+}
+
+func (m model) renderStreamingResult(width int) string {
+	if m.streamingResultIndex < 0 || m.streamingResultIndex >= len(m.transcript) || width <= 0 {
+		return ""
+	}
+	entry := m.transcript[m.streamingResultIndex]
+	if !entry.pending || entry.role != "assistant" || strings.TrimSpace(entry.content) == "" {
+		return ""
+	}
+	lines := clampTerminalLines(m.renderTranscriptEntry(width, entry), width)
+	return strings.Join(lines, "\n")
 }
 
 func (m model) renderPendingInput(width int) string {
@@ -1027,6 +1051,10 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		return m.handleAgentUIEvent(msg.event)
 	case agentui.ResultEvent:
+		return m.handleAgentUIEvent(msg)
+	case agentui.StreamResultEvent:
+		return m.handleAgentUIEvent(msg)
+	case agentui.StreamResultDoneEvent:
 		return m.handleAgentUIEvent(msg)
 	case agentui.FinalResultEvent:
 		return m.handleAgentUIEvent(msg)
