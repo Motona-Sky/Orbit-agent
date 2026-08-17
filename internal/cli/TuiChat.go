@@ -21,6 +21,9 @@ import (
 	"github.com/charmbracelet/bubbles/cursor"
 	"github.com/charmbracelet/bubbles/textinput"
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/charmbracelet/glamour"
+	glamouransi "github.com/charmbracelet/glamour/ansi"
+	"github.com/charmbracelet/glamour/styles"
 	"github.com/charmbracelet/lipgloss"
 	"github.com/charmbracelet/x/ansi"
 )
@@ -954,7 +957,41 @@ func (m model) renderTranscriptEntry(width int, entry chatTranscriptEntry) []str
 	if strings.HasPrefix(content, m.messages.Chat.AgentErrorLabel) {
 		return []string{m.accentStyle().Render("✗ ") + strings.TrimPrefix(content, m.messages.Chat.AgentErrorLabel)}
 	}
-	return []string{m.accentStyle().Render(m.messages.Chat.AssistantLabel), content}
+	return append(
+		[]string{m.accentStyle().Render(m.messages.Chat.AssistantLabel)},
+		renderTerminalMarkdown(content, width)...,
+	)
+}
+
+func renderTerminalMarkdown(content string, width int) []string {
+	renderer, err := glamour.NewTermRenderer(
+		glamour.WithStyles(terminalMarkdownStyle()),
+		glamour.WithWordWrap(width),
+	)
+	if err != nil {
+		return strings.Split(content, "\n")
+	}
+
+	rendered, err := renderer.Render(content)
+	if err != nil {
+		return strings.Split(content, "\n")
+	}
+	rendered = strings.Trim(rendered, "\n")
+	if rendered == "" {
+		return nil
+	}
+	return strings.Split(rendered, "\n")
+}
+
+func terminalMarkdownStyle() glamouransi.StyleConfig {
+	markdownStyle := styles.DarkStyleConfig
+	codeColor := "252"
+	markdownStyle.CodeBlock = glamouransi.StyleCodeBlock{
+		StyleBlock: glamouransi.StyleBlock{
+			StylePrimitive: glamouransi.StylePrimitive{Color: &codeColor},
+		},
+	}
+	return markdownStyle
 }
 
 func prefixFirstLine(prefix, content string) string {

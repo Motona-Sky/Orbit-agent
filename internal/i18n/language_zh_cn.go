@@ -82,6 +82,7 @@ var simplifiedChineseLanguage = Language{
 			TaskCompleted: "✓ 任务完成 %d/%d",
 			TaskCanceled:  "■ 任务已取消 %d/%d",
 			TurnCanceled:  "■ 已取消当前任务",
+			TurnTimedOut:  "■ 任务长时间无响应，已自动中断",
 		},
 		LanguageSetup: LanguageSetupMessages{
 			Title:        "Orbit",

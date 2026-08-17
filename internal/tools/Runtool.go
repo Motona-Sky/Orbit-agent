@@ -59,8 +59,12 @@ func RunTools(ctx context.Context, toolsValue []any) ([]ToolResult, error) {
 
 	results := make([]ToolResult, len(jobs))
 	for range jobs {
-		result := <-toolJobChannel
-		results[result.index] = result
+		select {
+		case <-ctx.Done():
+			return nil, ctx.Err()
+		case result := <-toolJobChannel:
+			results[result.index] = result
+		}
 	}
 	return results, nil
 }
@@ -85,7 +89,10 @@ func runtooljob(ctx context.Context, index int, tool ToolFunc, toolCallID string
 	} else {
 		result.Content = output
 	}
-	toolJobChannel <- result
+	select {
+	case toolJobChannel <- result:
+	case <-ctx.Done():
+	}
 }
 
 // Tool结果解析为json字符串

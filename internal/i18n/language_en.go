@@ -82,6 +82,7 @@ var englishLanguage = Language{
 			TaskCompleted: "✓ Tasks complete %d/%d",
 			TaskCanceled:  "■ Tasks canceled %d/%d",
 			TurnCanceled:  "■ Current task canceled",
+			TurnTimedOut:  "■ Task was unresponsive for too long and was automatically stopped",
 		},
 		LanguageSetup: LanguageSetupMessages{
 			Title:        "Orbit",

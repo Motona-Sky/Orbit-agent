@@ -11,6 +11,38 @@ import (
 	"github.com/charmbracelet/x/ansi"
 )
 
+func TestAssistantTranscriptRendersMarkdown(t *testing.T) {
+	m := NewModelForLanguage("zh-CN")
+	lines := m.renderTranscriptEntry(80, chatTranscriptEntry{
+		role:    "assistant",
+		content: "# 标题\n\n这是 **重点** 和 `code`。\n\n- 第一项\n- 第二项",
+	})
+	rendered := ansi.Strip(strings.Join(lines, "\n"))
+
+	for _, want := range []string{"标题", "重点", "code", "第一项", "第二项"} {
+		if !strings.Contains(rendered, want) {
+			t.Fatalf("rendered Markdown missing %q: %q", want, rendered)
+		}
+	}
+	for _, marker := range []string{"# 标题", "**重点**", "`code`"} {
+		if strings.Contains(rendered, marker) {
+			t.Fatalf("rendered Markdown kept marker %q: %q", marker, rendered)
+		}
+	}
+}
+
+func TestMarkdownCodeBlockHasNoBackgroundColor(t *testing.T) {
+	lines := renderTerminalMarkdown("```go\nfmt.Println(\"ok\")\n```", 80)
+	rendered := strings.Join(lines, "\n")
+
+	if strings.Contains(rendered, "48;") {
+		t.Fatalf("code block contains background color sequence: %q", rendered)
+	}
+	if plain := ansi.Strip(rendered); !strings.Contains(plain, "fmt.Println(\"ok\")") {
+		t.Fatalf("code block lost content: %q", plain)
+	}
+}
+
 func TestThinkingEventReplacesAndClearsWithoutTranscript(t *testing.T) {
 	m := NewModelForLanguage("zh-CN")
 	m.running = true
@@ -218,6 +250,96 @@ func TestThinkingRendersAsFirstRuntimeChild(t *testing.T) {
 			t.Fatalf("expanded tree = %#v", lines)
 		}
 	})
+}
+
+func TestRunningStatusWatchdogStopsUnresponsiveTurn(t *testing.T) {
+	startedAt := time.Date(2026, time.July, 23, 10, 0, 0, 0, time.UTC)
+	m := NewModelForLanguage("zh-CN")
+	m.running = true
+	ui := agentui.New()
+	m.agentUI = ui
+	m.startRunningStatus(startedAt)
+	m.thinkingText = "仍在处理"
+	m.recordActivity(agentui.ActivityEvent{Kind: agentui.ActivityTool, Target: "卡住的工具"})
+
+	updated, _ := m.Update(runningStatusTickMsg{
+		generation: m.runningStatus.generation,
+		now:        startedAt.Add(runningTurnTimeout),
+	})
+	m = updated.(model)
+
+	if m.running || m.agentUI != nil || !m.runningStatus.startedAt.IsZero() {
+		t.Fatalf("watchdog state = running %v, ui nil %v, startedAt %v", m.running, m.agentUI == nil, m.runningStatus.startedAt)
+	}
+	if m.thinkingText != "" || len(m.activities) != 0 {
+		t.Fatalf("watchdog left runtime state = thinking %q, activities %d", m.thinkingText, len(m.activities))
+	}
+	if _, err := ui.Next(); !errors.Is(err, agentui.ErrClosed) {
+		t.Fatalf("AgentUI.Next() error = %v, want ErrClosed", err)
+	}
+	if len(m.transcript) == 0 || m.transcript[len(m.transcript)-1].content != m.messages.Chat.TurnTimedOut {
+		t.Fatalf("transcript = %#v, want timeout message", m.transcript)
+	}
+	for _, entry := range m.transcript {
+		if entry.content == m.messages.Chat.TurnCanceled {
+			t.Fatalf("watchdog used generic cancellation message: %#v", m.transcript)
+		}
+	}
+}
+
+func TestRunningStatusWatchdogKeepsTickingBeforeTimeout(t *testing.T) {
+	startedAt := time.Date(2026, time.July, 23, 10, 0, 0, 0, time.UTC)
+	m := NewModelForLanguage("zh-CN")
+	m.running = true
+	m.agentUI = agentui.New()
+	defer m.agentUI.Close()
+	m.startRunningStatus(startedAt)
+
+	m, cmd := m.handleRunningStatusTick(runningStatusTickMsg{
+		generation: m.runningStatus.generation,
+		now:        startedAt.Add(runningTurnTimeout - time.Second),
+	})
+
+	if !m.running || m.agentUI == nil || cmd == nil {
+		t.Fatalf("pre-timeout state = running %v, ui nil %v, cmd nil %v", m.running, m.agentUI == nil, cmd == nil)
+	}
+	if m.runningStatus.elapsed != runningTurnTimeout-time.Second {
+		t.Fatalf("elapsed = %v, want %v", m.runningStatus.elapsed, runningTurnTimeout-time.Second)
+	}
+}
+
+func TestRunningStatusWatchdogRunsPendingInputAndIgnoresStaleMessages(t *testing.T) {
+	startedAt := time.Date(2026, time.July, 23, 10, 0, 0, 0, time.UTC)
+	m := NewModelForLanguage("zh-CN")
+	m.running = true
+	staleUI := agentui.New()
+	m.agentUI = staleUI
+	m.pendingInput = "排队任务"
+	m.startRunningStatus(startedAt)
+
+	updated, _ := m.Update(runningStatusTickMsg{
+		generation: m.runningStatus.generation,
+		now:        startedAt.Add(runningTurnTimeout),
+	})
+	m = updated.(model)
+	currentUI := m.agentUI
+	defer currentUI.Close()
+
+	if !m.running || currentUI == nil || currentUI == staleUI || m.pendingInput != "" {
+		t.Fatalf("pending input state = running %v, current ui valid %v, pending %q", m.running, currentUI != nil && currentUI != staleUI, m.pendingInput)
+	}
+	updated, _ = m.Update(agentRunFinishedMsg{ui: staleUI, err: errors.New("stale failure")})
+	m = updated.(model)
+	updated, _ = m.Update(agentUIClosedMsg{ui: staleUI, err: agentui.ErrClosed})
+	m = updated.(model)
+	if !m.running || m.agentUI != currentUI {
+		t.Fatal("stale messages changed the queued task")
+	}
+	for _, entry := range m.transcript {
+		if strings.Contains(entry.content, "stale failure") {
+			t.Fatalf("stale failure entered transcript: %#v", m.transcript)
+		}
+	}
 }
 
 func TestQuestionTemporarilyHidesThinkingAndThenRestoresIt(t *testing.T) {

@@ -5,6 +5,7 @@ import (
 	"errors"
 	"strings"
 	"testing"
+	"time"
 )
 
 func TestRunToolsReturnsExecutionErrorAsToolResult(t *testing.T) {
@@ -75,24 +76,39 @@ func TestRunToolsPreservesMixedResultOrder(t *testing.T) {
 	}
 }
 
-func TestRunToolsPassesContextToTool(t *testing.T) {
+func TestRunToolsReturnsWhenStuckToolContextIsCanceled(t *testing.T) {
 	const toolName = "test_context"
 	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
+	started := make(chan struct{})
+	release := make(chan struct{})
 	RegToolFuncs[toolName] = ToolFunc{
 		Name: toolName,
-		Function: func(callCtx context.Context, _ []any) (string, error) {
-			return "", callCtx.Err()
+		Function: func(context.Context, []any) (string, error) {
+			close(started)
+			<-release
+			return "late result", nil
 		},
 	}
-	t.Cleanup(func() { delete(RegToolFuncs, toolName) })
+	t.Cleanup(func() {
+		close(release)
+		delete(RegToolFuncs, toolName)
+	})
 
-	results, err := RunTools(ctx, []any{testToolCall("call-context", toolName)})
-	if err != nil {
-		t.Fatalf("RunTools() error = %v", err)
-	}
-	if len(results) != 1 || !strings.Contains(results[0].Content, context.Canceled.Error()) {
-		t.Fatalf("results = %#v, want canceled context error", results)
+	done := make(chan error, 1)
+	go func() {
+		_, err := RunTools(ctx, []any{testToolCall("call-context", toolName)})
+		done <- err
+	}()
+	<-started
+	cancel()
+
+	select {
+	case err := <-done:
+		if !errors.Is(err, context.Canceled) {
+			t.Fatalf("RunTools() error = %v, want context.Canceled", err)
+		}
+	case <-time.After(time.Second):
+		t.Fatal("RunTools() did not return after context cancellation")
 	}
 }
 

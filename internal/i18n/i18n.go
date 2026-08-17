@@ -101,6 +101,7 @@ type ChatMessages struct {
 	TaskCompleted string
 	TaskCanceled  string
 	TurnCanceled  string
+	TurnTimedOut  string
 }
 
 // LanguageSetupMessages 是语言选择 TUI 自身的文案结构。

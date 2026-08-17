@@ -10,7 +10,10 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 )
 
-const runningStatusTickInterval = 800 * time.Millisecond
+const (
+	runningStatusTickInterval = 800 * time.Millisecond
+	runningTurnTimeout        = 10 * time.Minute
+)
 
 type runningStatusState struct {
 	generation uint64
@@ -54,6 +57,24 @@ func (m model) handleRunningStatusTick(msg runningStatusTickMsg) (model, tea.Cmd
 		elapsed = 0
 	}
 	m.runningStatus.elapsed = elapsed
+	if elapsed >= runningTurnTimeout {
+		m.closeAgentUI()
+		m.clearPendingUserTranscript()
+		m.running = false
+		m.stopRunningStatus()
+		m.turnCanceled = true
+		m.exitConfirm = false
+		m.appendActivitySummary()
+		if len(m.tasks) > 0 {
+			m.appendTaskSummary(true)
+		}
+		m.transcript = append(m.transcript, chatTranscriptEntry{
+			kind:    transcriptStatus,
+			content: m.messages.Chat.TurnTimedOut,
+		})
+		m, transcriptCmd := m.commitTerminalTranscript(nil)
+		return m.runPendingInput(transcriptCmd)
+	}
 	phraseCount := len(m.messages.Chat.AgentThinkingPhrases)
 	if phraseCount > 0 {
 		m.runningStatus.frame = (m.runningStatus.frame + 1) % phraseCount

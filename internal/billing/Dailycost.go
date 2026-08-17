@@ -251,10 +251,22 @@ func openDailyCostDatabase(dbpath string) (*sql.DB, error) {
 
 func insertCostData(db *sql.DB, sessionid string, usage map[string]any, date string) (DailyUsage, error) {
 	prompt_tokens := getInt(usage, "prompt_tokens")
+	if prompt_tokens == 0 {
+		prompt_tokens = getInt(usage, "input_tokens")
+	}
 	completion_tokens := getInt(usage, "completion_tokens")
+	if completion_tokens == 0 {
+		completion_tokens = getInt(usage, "output_tokens")
+	}
 	total_tokens := getInt(usage, "total_tokens")
 	prompt_tokens_details := getNestedInt(usage, "prompt_tokens_details", "cached_tokens")
+	if prompt_tokens_details == 0 {
+		prompt_tokens_details = getNestedInt(usage, "input_tokens_details", "cached_tokens")
+	}
 	reasoning_tokens := getNestedInt(usage, "completion_tokens_details", "reasoning_tokens")
+	if reasoning_tokens == 0 {
+		reasoning_tokens = getNestedInt(usage, "output_tokens_details", "reasoning_tokens")
+	}
 	prompt_cache_miss_tokens := getInt(usage, "prompt_cache_miss_tokens")
 
 	sqlStmt := `

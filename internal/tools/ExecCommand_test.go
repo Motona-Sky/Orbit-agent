@@ -1,6 +1,8 @@
 package tools
 
 import (
+	"context"
+	"errors"
 	"runtime"
 	"strings"
 	"testing"
@@ -31,6 +33,21 @@ func TestExecCommandKeepsUnderlyingErrorWhenCommandHasNoOutput(t *testing.T) {
 	_, err := execCommand("exit 7", 5*time.Second)
 	if err == nil {
 		t.Fatal("execCommand() error = nil, want non-empty underlying error")
+	}
+}
+
+func TestCallExecCommandFuncStopsOnParentContextCancellation(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("shell sleep command is Unix-specific")
+	}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	_, err := CallExecCommandFunc(ctx, []any{map[string]any{
+		"arguments": `{"command":"sleep 30"}`,
+	}})
+	if !errors.Is(err, context.Canceled) {
+		t.Fatalf("CallExecCommandFunc() error = %v, want context.Canceled", err)
 	}
 }
 

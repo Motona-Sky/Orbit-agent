@@ -21,7 +21,11 @@ func ExecCommand(command string) (string, error) {
 }
 
 func execCommand(command string, timeout time.Duration) (string, error) {
-	ctx, cancel := context.WithTimeout(context.Background(), timeout)
+	return execCommandContext(context.Background(), command, timeout)
+}
+
+func execCommandContext(parent context.Context, command string, timeout time.Duration) (string, error) {
+	ctx, cancel := context.WithTimeout(parent, timeout)
 	defer cancel()
 
 	var cmd *exec.Cmd
@@ -41,6 +45,9 @@ func execCommand(command string, timeout time.Duration) (string, error) {
 	if errors.Is(ctx.Err(), context.DeadlineExceeded) {
 		return "", fmt.Errorf("command timed out after %s: %w", timeout, context.DeadlineExceeded)
 	}
+	if ctx.Err() != nil {
+		return "", ctx.Err()
+	}
 	if err != nil {
 		commandError := strings.TrimSpace(string(output))
 		if commandError != "" {
@@ -52,7 +59,7 @@ func execCommand(command string, timeout time.Duration) (string, error) {
 
 }
 
-func CallExecCommandFunc(_ context.Context, jsonstr []any) (string, error) {
+func CallExecCommandFunc(ctx context.Context, jsonstr []any) (string, error) {
 	if len(jsonstr) == 0 {
 		return "", fmt.Errorf("tool calls is empty")
 	}
@@ -68,7 +75,7 @@ func CallExecCommandFunc(_ context.Context, jsonstr []any) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	return execCommand(command, timeout)
+	return execCommandContext(ctx, command, timeout)
 }
 
 func parseExecCommandArguments(arguments string) (string, time.Duration, error) {
