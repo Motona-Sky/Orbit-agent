@@ -252,7 +252,9 @@ func (ui *AgentUI) DisplayUsage(stats UsageStats) error {
 	return ui.send(UsageEvent{Stats: stats})
 }
 func (ui *AgentUI) send(event Event) error {
-	debug.Record("agent_ui", debugEvent(event))
+	if debug.Enabled() {
+		debug.Record("agent_ui", debugEvent(event))
+	}
 	if ui.closed.Load() {
 		return ErrClosed
 	}
@@ -274,6 +276,18 @@ func (ui *AgentUI) send(event Event) error {
 }
 
 func debugEvent(event Event) any {
+	switch event := event.(type) {
+	case StreamResultEvent:
+		return struct {
+			Type  string `json:"type"`
+			Bytes int    `json:"bytes"`
+		}{Type: "stream_result", Bytes: len(event.Text)}
+	case ThinkingEvent:
+		return struct {
+			Type  string `json:"type"`
+			Bytes int    `json:"bytes"`
+		}{Type: "thinking", Bytes: len(event.Text)}
+	}
 	if question, ok := event.(*QuestionEvent); ok {
 		return struct {
 			Type     string   `json:"type"`

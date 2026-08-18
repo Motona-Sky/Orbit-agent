@@ -34,6 +34,11 @@ type RunAgentValue struct {
 
 var contextLength float64 = 0
 
+const (
+	maxAgentIterations    = 70
+	maxRepeatedToolRounds = 3
+)
+
 // RunAgent 加载会话上下文并执行 Agent 循环，直至产生最终回复或遇到不可恢复的错误。
 func RunAgent(ctx context.Context, agentvalue RunAgentValue, ui *agentui.AgentUI) error {
 	var memory []llm.MemoryMessage
@@ -83,6 +88,8 @@ func RunAgent(ctx context.Context, agentvalue RunAgentValue, ui *agentui.AgentUI
 	}
 	var AgentiterNum int = 0
 	var RetryNum int = 5
+	var previousToolRoundSignature string
+	var repeatedToolRoundCount int
 	SessionId := utils.SessionId
 	debug.Record("agent_start", map[string]any{
 		"provider":       agentvalue.Provider,
@@ -125,7 +132,7 @@ func RunAgent(ctx context.Context, agentvalue RunAgentValue, ui *agentui.AgentUI
 	// 压缩上下文
 	//主循环
 	//GetAllTool→GenReqJsonPv→RequestProvider→ParseResponse→PublishDailyUsage→SaveMemory→DisplayResult
-	for {
+	for AgentiterNum < maxAgentIterations {
 		AgentiterNum++
 		// GetAllTool 内部按 mcpEnabled/disabledTools 自动过滤，agent 层不感知开关。
 		allTools := tools.GetAllTool(agentvalue.Provider)
@@ -140,20 +147,33 @@ func RunAgent(ctx context.Context, agentvalue RunAgentValue, ui *agentui.AgentUI
 		req.SystemPrompt = ""
 		req.UserInput = ""
 		var responseJSON string
-		streamedText := ""
-		streamedReasoning := ""
+		var streamedText strings.Builder
+		var streamedReasoning strings.Builder
+		var lastStreamTextUpdate time.Time
+		var lastStreamReasoningUpdate time.Time
 		streamedToolCalls := make(map[string]struct{})
 		for attempt := 1; attempt <= RetryNum; attempt++ {
+			streamedText.Reset()
+			streamedReasoning.Reset()
+			lastStreamTextUpdate = time.Time{}
+			lastStreamReasoningUpdate = time.Time{}
+			streamedToolCalls = make(map[string]struct{})
 			var requestErr error
 			if agentvalue.Auth == "codex" {
 				requestErr, responseJSON = llm.RequOuthStream(ctx, credential, agentvalue.AccountID, agentvalue.Provider, data, func(event llm.CodexStreamEvent) error {
 					switch event.Type {
 					case "response.output_text.delta":
-						streamedText += event.Delta
-						return ui.DisplayStreamResult(streamedText)
+						streamedText.WriteString(event.Delta)
+						if !shouldPublishStreamUpdate(&lastStreamTextUpdate, time.Now()) {
+							return nil
+						}
+						return ui.DisplayStreamResult(streamedText.String())
 					case "response.reasoning_summary_text.delta":
-						streamedReasoning += event.Delta
-						return ui.DisplayThinking(streamedReasoning)
+						streamedReasoning.WriteString(event.Delta)
+						if !shouldPublishStreamUpdate(&lastStreamReasoningUpdate, time.Now()) {
+							return nil
+						}
+						return ui.DisplayThinking(streamedReasoning.String())
 					case "response.output_item.done":
 						if event.Item["type"] != "function_call" {
 							return nil
@@ -191,11 +211,14 @@ func RunAgent(ctx context.Context, agentvalue RunAgentValue, ui *agentui.AgentUI
 			}
 		}
 		// 解析响应
-		toolCalls, assistantMemory, usage, err := ParseResponse(req.Provider, responseJSON)
+		toolCalls, assistantMemory, usage, responseState, err := ParseResponseDetails(req.Provider, responseJSON)
 		if err != nil {
 			return ui.DisplayResult(err.Error())
 		}
-		debug.Record("parsed_response", map[string]any{"iteration": AgentiterNum, "tool_calls": toolCalls, "assistant_memory": assistantMemory, "usage": usage})
+		if err := responseState.validate(toolCalls); err != nil {
+			return err
+		}
+		debug.Record("parsed_response", map[string]any{"iteration": AgentiterNum, "tool_calls": toolCalls, "assistant_memory": assistantMemory, "usage": usage, "finish_reason": responseState.FinishReason, "status": responseState.Status, "incomplete": responseState.Incomplete})
 		if len(assistantMemory) > 0 && strings.TrimSpace(assistantMemory[0].ReasoningContent) != "" {
 			if err := ui.DisplayThinking(assistantMemory[0].ReasoningContent); err != nil {
 				return ui.DisplayResult(err.Error())
@@ -218,7 +241,7 @@ func RunAgent(ctx context.Context, agentvalue RunAgentValue, ui *agentui.AgentUI
 			}
 			finalContent := assistantMemory[0].Content
 			if strings.TrimSpace(finalContent) == "" {
-				finalContent = streamedText
+				finalContent = streamedText.String()
 				assistantMemory[0].Content = finalContent
 				memory[len(memory)-1].Content = finalContent
 			}
@@ -231,14 +254,14 @@ func RunAgent(ctx context.Context, agentvalue RunAgentValue, ui *agentui.AgentUI
 				memorys.CreateSessionFolder()
 			}
 			debug.Record("saved_memory", memory)
-			if streamedText != "" {
+			if streamedText.Len() > 0 {
 				if err := ui.FinishStreamResult(finalContent); err != nil {
 					return err
 				}
 			}
 			return ui.DisplayFinalResult(finalContent)
 		}
-		if streamedText != "" {
+		if streamedText.Len() > 0 {
 			if err := ui.FinishStreamResult(assistantMemory[0].Content); err != nil {
 				return err
 			}
@@ -262,6 +285,19 @@ func RunAgent(ctx context.Context, agentvalue RunAgentValue, ui *agentui.AgentUI
 		if err != nil {
 			return fmt.Errorf("run tools err: %w", err)
 		}
+		toolRoundSignature, err := makeToolRoundSignature(toolCalls, toolResults)
+		if err != nil {
+			return fmt.Errorf("build tool round signature: %w", err)
+		}
+		if toolRoundSignature == previousToolRoundSignature {
+			repeatedToolRoundCount++
+		} else {
+			previousToolRoundSignature = toolRoundSignature
+			repeatedToolRoundCount = 1
+		}
+		if repeatedToolRoundCount >= maxRepeatedToolRounds {
+			return fmt.Errorf("agent stopped after repeating the same tool calls and results for %d rounds", repeatedToolRoundCount)
+		}
 		debug.Record("tool_results", map[string]any{"iteration": AgentiterNum, "calls": toolCalls, "results": toolResults})
 		toolMemory := llm.GettoolCallMemory(toolResults)
 		memory = memorys.AppendMemoryMessages(memory, toolMemory)
@@ -275,6 +311,47 @@ func RunAgent(ctx context.Context, agentvalue RunAgentValue, ui *agentui.AgentUI
 			}
 		}
 	}
+	return fmt.Errorf("agent stopped after reaching the maximum of %d iterations", maxAgentIterations)
+}
+
+func makeToolRoundSignature(toolCalls []any, toolResults []tools.ToolResult) (string, error) {
+	if len(toolCalls) != len(toolResults) {
+		return "", errors.New("tool calls and results length mismatch")
+	}
+	type signatureItem struct {
+		Name      string `json:"name"`
+		Arguments string `json:"arguments"`
+		Result    string `json:"result"`
+	}
+	items := make([]signatureItem, 0, len(toolCalls))
+	for index, value := range toolCalls {
+		call, ok := value.(map[string]any)
+		if !ok {
+			return "", errors.New("tool call format is invalid")
+		}
+		function, ok := call["function"].(map[string]any)
+		if !ok {
+			return "", errors.New("tool function format is invalid")
+		}
+		name, _ := function["name"].(string)
+		arguments, _ := function["arguments"].(string)
+		items = append(items, signatureItem{Name: name, Arguments: arguments, Result: toolResults[index].Content})
+	}
+	encoded, err := json.Marshal(items)
+	if err != nil {
+		return "", err
+	}
+	return string(encoded), nil
+}
+
+const streamUIUpdateInterval = 50 * time.Millisecond
+
+func shouldPublishStreamUpdate(lastUpdate *time.Time, now time.Time) bool {
+	if !lastUpdate.IsZero() && now.Sub(*lastUpdate) < streamUIUpdateInterval {
+		return false
+	}
+	*lastUpdate = now
+	return true
 }
 
 // loadAgentMemory 加载会话历史；仅新会话允许历史文件尚不存在，恢复会话会传播该错误。

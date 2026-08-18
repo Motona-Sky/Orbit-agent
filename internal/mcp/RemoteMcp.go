@@ -200,11 +200,21 @@ type recentBuffer struct {
 func (b *recentBuffer) Write(p []byte) (int, error) {
 	b.mu.Lock()
 	defer b.mu.Unlock()
-	b.data = append(b.data, p...)
-	if len(b.data) > b.limit {
-		b.data = append([]byte(nil), b.data[len(b.data)-b.limit:]...)
+	written := len(p)
+	if b.limit <= 0 {
+		return written, nil
 	}
-	return len(p), nil
+	if len(p) >= b.limit {
+		b.data = append(b.data[:0], p[len(p)-b.limit:]...)
+		return written, nil
+	}
+	overflow := len(b.data) + len(p) - b.limit
+	if overflow > 0 {
+		copy(b.data, b.data[overflow:])
+		b.data = b.data[:len(b.data)-overflow]
+	}
+	b.data = append(b.data, p...)
+	return written, nil
 }
 
 func (b *recentBuffer) String() string {

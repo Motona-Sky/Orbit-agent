@@ -27,7 +27,7 @@ func RequOuthStream(ctx context.Context, accesstoken string, accountID string, p
 
 	reader, writer := io.Pipe()
 	client := req.C()
-	request := client.SetTimeout(30*time.Second).R().
+	request := client.R().
 		SetContext(ctx).
 		SetHeader("Content-Type", "application/json").
 		SetHeader("Accept", "text/event-stream").

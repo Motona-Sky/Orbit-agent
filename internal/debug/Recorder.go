@@ -26,6 +26,10 @@ func Enable() {
 	enabled.Store(true)
 }
 
+func Enabled() bool {
+	return enabled.Load()
+}
+
 func StartSession(pwd, sessionID string) error {
 	if !enabled.Load() {
 		return nil

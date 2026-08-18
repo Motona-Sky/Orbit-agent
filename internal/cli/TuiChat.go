@@ -6,6 +6,7 @@ import (
 	"strconv"
 	"strings"
 	"time"
+	"unicode/utf8"
 
 	"orbit/internal/agentui"
 	"orbit/internal/billing"
@@ -588,7 +589,11 @@ func (m model) renderChatScreen() string {
 		footerHelp = m.messages.Chat.ExitConfirm
 	}
 	dock := strings.TrimRight(m.renderWorkDock(width, footerHelp), "\n")
-	status := strings.TrimSpace(m.renderInlineStatus(width))
+	statusLineLimit := 0
+	if m.height > 0 {
+		statusLineLimit = maxInt(1, m.height-lipgloss.Height(dock)-2)
+	}
+	status := strings.TrimSpace(m.renderInlineStatus(width, statusLineLimit))
 	dynamicHeight := lipgloss.Height(status)
 	view := dock
 	if status != "" {
@@ -599,17 +604,17 @@ func (m model) renderChatScreen() string {
 		view = m.renderShortScreenChat(width, m.height)
 	}
 
-	// #region debug-point
-	debug.Record("chat_view_layout", map[string]any{
-		"runId":            "native-scrollback",
-		"nativeScrollback": true,
-		"terminalWidth":    m.width,
-		"terminalHeight":   m.height,
-		"dynamicHeight":    dynamicHeight,
-		"viewHeight":       lipgloss.Height(view),
-		"shortMode":        shortMode,
-	})
-	// #endregion debug-point
+	if debug.Enabled() {
+		debug.Record("chat_view_layout", map[string]any{
+			"runId":            "native-scrollback",
+			"nativeScrollback": true,
+			"terminalWidth":    m.width,
+			"terminalHeight":   m.height,
+			"dynamicHeight":    dynamicHeight,
+			"viewHeight":       lipgloss.Height(view),
+			"shortMode":        shortMode,
+		})
+	}
 	return view
 }
 
@@ -627,7 +632,7 @@ func (m model) renderShortScreenChat(width, height int) string {
 	if m.streamingResultIndex >= 0 && m.streamingResultIndex < len(m.transcript) {
 		entry := m.transcript[m.streamingResultIndex]
 		if entry.pending && strings.TrimSpace(entry.content) != "" {
-			streamLines := clampTerminalLines(m.renderTranscriptEntry(width, entry), width)
+			streamLines := m.renderPendingAssistantLines(width, entry.content, maxInt(1, height-1))
 			lines = append(lines, streamLines...)
 		}
 	}
@@ -674,7 +679,7 @@ func fitChatLine(value string, width int) string {
 }
 
 // renderInlineStatus 在工作提示坞上方显示当前待回答询问。
-func (m model) renderInlineStatus(width int) string {
+func (m model) renderInlineStatus(width int, lineLimit ...int) string {
 	if m.activeQuestion >= 0 && m.activeQuestion < len(m.transcript) {
 		entry := m.transcript[m.activeQuestion]
 		if entry.kind == transcriptQuestion && entry.pending {
@@ -682,7 +687,11 @@ func (m model) renderInlineStatus(width int) string {
 		}
 	}
 	parts := make([]string, 0, 3)
-	if streaming := m.renderStreamingResult(width); streaming != "" {
+	maxLines := 0
+	if len(lineLimit) > 0 {
+		maxLines = lineLimit[0]
+	}
+	if streaming := m.renderStreamingResult(width, maxLines); streaming != "" {
 		parts = append(parts, streaming)
 	}
 	if runtime := m.renderRuntimeActivityTree(width); runtime != "" {
@@ -694,7 +703,7 @@ func (m model) renderInlineStatus(width int) string {
 	return strings.Join(parts, "\n\n")
 }
 
-func (m model) renderStreamingResult(width int) string {
+func (m model) renderStreamingResult(width, maxLines int) string {
 	if m.streamingResultIndex < 0 || m.streamingResultIndex >= len(m.transcript) || width <= 0 {
 		return ""
 	}
@@ -702,8 +711,32 @@ func (m model) renderStreamingResult(width int) string {
 	if !entry.pending || entry.role != "assistant" || strings.TrimSpace(entry.content) == "" {
 		return ""
 	}
-	lines := clampTerminalLines(m.renderTranscriptEntry(width, entry), width)
+	lines := m.renderPendingAssistantLines(width, entry.content, maxLines)
 	return strings.Join(lines, "\n")
+}
+
+func (m model) renderPendingAssistantLines(width int, content string, maxLines int) []string {
+	if maxLines > 0 {
+		content = tailUTF8(content, maxInt(4096, width*maxLines*4))
+	}
+	lines := []string{m.accentStyle().Render(m.messages.Chat.AssistantLabel)}
+	lines = append(lines, strings.Split(ansi.Strip(strings.TrimSpace(content)), "\n")...)
+	lines = clampTerminalLines(lines, width)
+	if maxLines > 0 && len(lines) > maxLines {
+		lines = lines[len(lines)-maxLines:]
+	}
+	return lines
+}
+
+func tailUTF8(value string, maxBytes int) string {
+	if maxBytes <= 0 || len(value) <= maxBytes {
+		return value
+	}
+	start := len(value) - maxBytes
+	for start < len(value) && !utf8.RuneStart(value[start]) {
+		start++
+	}
+	return value[start:]
 }
 
 func (m model) renderPendingInput(width int) string {
@@ -782,22 +815,26 @@ func (m model) renderWorkDock(width int, footerHelp string) string {
 	taskWidth := maxInt(18, width/4)
 	inputWidth := maxInt(1, width-taskWidth-workDockGap)
 	input := m.renderAgentCommandInput(inputWidth)
-	panelHeight := maxInt(lipgloss.Height(input)+2, len(m.workPromptLines())+2)
+	promptLines := m.workPromptLines()
+	panelHeight := maxInt(lipgloss.Height(input)+2, len(promptLines)+2)
 	inputLines := []string{input, m.renderDockFooterHelp(footerHelp, inputWidth)}
-	for lipgloss.Height(strings.Join(inputLines, "\n")) < panelHeight {
+	inputHeight := lipgloss.Height(strings.Join(inputLines, "\n"))
+	for inputHeight < panelHeight {
 		inputLines = append(inputLines, " ")
+		inputHeight++
 	}
 	return lipgloss.JoinHorizontal(
 		lipgloss.Top,
 		strings.Join(inputLines, "\n"),
 		strings.Repeat(" ", workDockGap),
-		m.renderWorkPromptPanel(taskWidth, panelHeight),
+		m.renderWorkPromptPanelLines(taskWidth, panelHeight, promptLines),
 	)
 }
 
 // renderStackedWorkDock 在窄终端中将任务框放到输入区上方。
 func (m model) renderStackedWorkDock(width int, footerHelp string) string {
-	panel := m.renderWorkPromptPanel(width, len(m.workPromptLines())+2)
+	promptLines := m.workPromptLines()
+	panel := m.renderWorkPromptPanelLines(width, len(promptLines)+2, promptLines)
 	return strings.Join([]string{
 		panel,
 		"",
@@ -814,8 +851,11 @@ func (m model) renderDockFooterHelp(footerHelp string, width int) string {
 
 // renderWorkPromptPanel 绘制指定宽高的工作提示框，标题嵌入顶部边框。
 func (m model) renderWorkPromptPanel(width, height int) string {
+	return m.renderWorkPromptPanelLines(width, height, m.workPromptLines())
+}
+
+func (m model) renderWorkPromptPanelLines(width, height int, lines []string) string {
 	width = maxInt(8, width)
-	lines := m.workPromptLines()
 	height = maxInt(height, len(lines)+2)
 	innerWidth := maxInt(1, width-4)
 	title := strings.TrimSpace(strings.TrimPrefix(m.messages.Chat.CurrentTask, ">"))
@@ -932,6 +972,9 @@ func (m model) renderTranscriptEntry(width int, entry chatTranscriptEntry) []str
 	}
 	if strings.HasPrefix(content, m.messages.Chat.AgentErrorLabel) {
 		return []string{m.accentStyle().Render("✗ ") + strings.TrimPrefix(content, m.messages.Chat.AgentErrorLabel)}
+	}
+	if entry.pending {
+		return m.renderPendingAssistantLines(width, content, 0)
 	}
 	return append(
 		[]string{m.accentStyle().Render(m.messages.Chat.AssistantLabel)},

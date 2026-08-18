@@ -44,6 +44,43 @@ func TestMarkdownCodeBlockHasNoBackgroundColor(t *testing.T) {
 	}
 }
 
+func TestPendingAssistantTranscriptUsesLightweightRendering(t *testing.T) {
+	m := NewModelForLanguage("zh-CN")
+	lines := m.renderTranscriptEntry(80, chatTranscriptEntry{
+		role:    "assistant",
+		content: "# 尚未完成\n\n**流式内容**",
+		pending: true,
+	})
+	rendered := ansi.Strip(strings.Join(lines, "\n"))
+
+	if !strings.Contains(rendered, "# 尚未完成") || !strings.Contains(rendered, "**流式内容**") {
+		t.Fatalf("pending assistant content was parsed or lost: %q", rendered)
+	}
+}
+
+func TestPendingAssistantRenderingKeepsBoundedUTF8Tail(t *testing.T) {
+	m := NewModelForLanguage("zh-CN")
+	content := strings.Repeat("较早内容\n", 2000) + "最终可见内容"
+	lines := m.renderPendingAssistantLines(40, content, 4)
+	rendered := ansi.Strip(strings.Join(lines, "\n"))
+
+	if len(lines) > 4 {
+		t.Fatalf("pending lines = %d, want at most 4", len(lines))
+	}
+	if !strings.Contains(rendered, "最终可见内容") {
+		t.Fatalf("pending tail lost final UTF-8 content: %q", rendered)
+	}
+}
+
+func BenchmarkPendingAssistantRenderingLongStream(b *testing.B) {
+	m := NewModelForLanguage("zh-CN")
+	content := strings.Repeat("持续增长的流式回答内容。\n", 10000)
+	b.ReportAllocs()
+	for b.Loop() {
+		_ = m.renderPendingAssistantLines(100, content, 20)
+	}
+}
+
 func TestThinkingEventReplacesAndClearsWithoutTranscript(t *testing.T) {
 	m := NewModelForLanguage("zh-CN")
 	m.running = true

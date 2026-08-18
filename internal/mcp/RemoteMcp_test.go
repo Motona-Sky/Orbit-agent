@@ -123,6 +123,14 @@ func TestRecentBufferKeepsLatestStderr(t *testing.T) {
 	}
 }
 
+func TestRecentBufferKeepsTailOfLargeWrite(t *testing.T) {
+	buffer := &recentBuffer{limit: 5}
+	_, _ = buffer.Write([]byte("123456789"))
+	if got := buffer.String(); got != "56789" {
+		t.Fatalf("String() = %q, want %q", got, "56789")
+	}
+}
+
 type roundTripFunc func(*http.Request) (*http.Response, error)
 
 func (fn roundTripFunc) RoundTrip(req *http.Request) (*http.Response, error) {
