@@ -15,7 +15,8 @@ func (m model) startEffortSetup() (model, tea.Cmd) {
 
 	appConfig, err := config.LoadAppConfig()
 	if err != nil {
-		return m.reportModelSetupError(fmt.Errorf("load effort config: %w", err))
+		m, _ = m.reportModelSetupError(fmt.Errorf("load effort config: %w", err))
+		return m.commitTerminalTranscript(nil)
 	}
 	setup := initialConfigEffortForLanguage(appConfig.Language, appConfig.ThinkLevel)
 	setup.terminalWidth = m.width

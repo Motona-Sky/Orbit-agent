@@ -10,6 +10,7 @@ import (
 	"orbit/internal/agentui"
 	"orbit/internal/billing"
 	"orbit/internal/config"
+	"orbit/internal/debug"
 	"orbit/internal/event"
 	"orbit/internal/i18n"
 	"orbit/internal/llm"
@@ -30,16 +31,15 @@ import (
 
 // ChatTuimodel
 type model struct {
-	composer           textinput.Model // 用户输入框。
-	composerValue      string
-	Pwd                string
-	sessionID          string
-	width              int           // 最近一次收到的终端宽度。
-	height             int           // 最近一次收到的终端高度。
-	screenInitialized  bool          // 主聊天是否已收到有效尺寸并可渲染完整终端网格。
-	lastTerminalHeight int           // 上一次有效窗口高度，用于终端增高时补空行。
-	messages           i18n.Messages // 当前界面使用的文案，默认来自 i18n.DefaultLanguage。
-	styleConfig        config.StyleConfig
+	composer          textinput.Model // 用户输入框。
+	composerValue     string
+	Pwd               string
+	sessionID         string
+	width             int           // 最近一次收到的终端宽度。
+	height            int           // 最近一次收到的终端高度。
+	screenInitialized bool          // 主聊天是否已收到有效尺寸并可渲染完整终端网格。
+	messages          i18n.Messages // 当前界面使用的文案，默认来自 i18n.DefaultLanguage。
+	styleConfig       config.StyleConfig
 
 	transcript               []chatTranscriptEntry
 	terminalTranscriptCursor int
@@ -239,47 +239,6 @@ func currentWorkingDirectory() string {
 		return ""
 	}
 	return workspace
-}
-
-// startupBanner 生成主聊天进入普通终端时只输出一次的 Logo 和工作区。
-func (m model) startupBanner() string {
-	width := terminalContentWidth(m.width)
-	if width == 0 {
-		return ""
-	}
-
-	indent := ""
-	contentWidth := width
-	if width >= 3 {
-		indent = "  "
-		contentWidth = width - lipgloss.Width(indent)
-	}
-
-	lines := []string{style.RenderOrbitalLogoForViewportWithStyle(m.messages.Chat.BrandName, width, m.styleConfig)}
-	workspace := strings.TrimSpace(m.messages.Chat.WorkspacePath)
-	if workspace != "" && workspace != "-" {
-		workspace = lipgloss.NewStyle().Inline(true).MaxWidth(contentWidth).Render(workspace)
-		lines = append(lines, m.mutedStyle().Render(indent+workspace))
-	}
-	dividerWidth := minInt(21, contentWidth)
-	lines = append(lines, m.mutedStyle().Render(indent+strings.Repeat("─", dividerWidth)))
-	return strings.Join(lines, "\n")
-}
-
-// startupPrelude 生成首次清屏后永久输出的横幅和底部定位空行。
-func (m model) startupPrelude() string {
-	banner := m.startupBanner()
-	targetHeight := m.height - lipgloss.Height(m.View())
-	outputHeight := maxInt(lipgloss.Height(banner), targetHeight)
-	return banner + strings.Repeat("\n", outputHeight-lipgloss.Height(banner))
-}
-
-// terminalBlankLines 返回让 tea.Println 精确输出 count 个空行的消息体。
-func terminalBlankLines(count int) string {
-	if count <= 1 {
-		return ""
-	}
-	return strings.Repeat("\n", count-1)
 }
 
 func (m model) handleComposerKey(msg tea.KeyMsg) (bool, model, tea.Cmd) {
@@ -590,7 +549,7 @@ func dropLastRune(value string) string {
 	return string(runes[:len(runes)-1])
 }
 
-// View 在普通终端底部渲染原工作坞；稳定聊天记录由终端原生历史承载。
+// View 在普通屏模式中只渲染动态状态与底部工作坞，稳定记录交给终端 scrollback。
 func (m model) View() string {
 	if m.modelSetup != nil {
 		if !m.setupScreenReady {
@@ -616,6 +575,10 @@ func (m model) View() string {
 		}
 		return m.renderMcpPage()
 	}
+	return m.renderChatScreen()
+}
+
+func (m model) renderChatScreen() string {
 	width := terminalContentWidth(m.width)
 	if width == 0 {
 		return ""
@@ -624,19 +587,33 @@ func (m model) View() string {
 	if m.exitConfirm {
 		footerHelp = m.messages.Chat.ExitConfirm
 	}
-	lines := []string{}
-	if status := m.renderInlineStatus(width); status != "" {
-		lines = append(lines, status, "")
+	dock := strings.TrimRight(m.renderWorkDock(width, footerHelp), "\n")
+	status := strings.TrimSpace(m.renderInlineStatus(width))
+	dynamicHeight := lipgloss.Height(status)
+	view := dock
+	if status != "" {
+		view = status + "\n\n" + dock
 	}
-	lines = append(lines, m.renderWorkDock(width, footerHelp))
-	dock := strings.TrimRight(strings.Join(lines, "\n"), "\n")
-	if m.screenInitialized && m.height > 0 && lipgloss.Height(dock) > m.height {
-		return m.renderShortScreenChat(width, m.height)
+	shortMode := m.height > 0 && lipgloss.Height(view) > m.height
+	if shortMode {
+		view = m.renderShortScreenChat(width, m.height)
 	}
-	return dock
+
+	// #region debug-point
+	debug.Record("chat_view_layout", map[string]any{
+		"runId":            "native-scrollback",
+		"nativeScrollback": true,
+		"terminalWidth":    m.width,
+		"terminalHeight":   m.height,
+		"dynamicHeight":    dynamicHeight,
+		"viewHeight":       lipgloss.Height(view),
+		"shortMode":        shortMode,
+	})
+	// #endregion debug-point
+	return view
 }
 
-// renderShortScreenChat 在原工作坞无法放入终端时保留当前状态与输入。
+// renderShortScreenChat 在动态状态与完整工作坞无法放入终端时保留当前状态与输入。
 func (m model) renderShortScreenChat(width, height int) string {
 	if height <= 0 {
 		return ""
@@ -677,15 +654,17 @@ func (m model) renderShortScreenChat(width, height int) string {
 		}
 		lines = append(lines, fitChatLine(strings.Split(status, "\n")[0], width))
 	}
-	if len(lines) < height {
-		lines = append(lines, input)
+	if height == 1 {
+		return input
 	}
-	if len(lines) > height {
-		lines = lines[:height]
+	contentHeight := height - 1
+	if len(lines) > contentHeight {
+		lines = lines[len(lines)-contentHeight:]
 	}
-	for len(lines) < height {
+	for len(lines) < contentHeight {
 		lines = append([]string{""}, lines...)
 	}
+	lines = append(lines, input)
 	return strings.Join(lines, "\n")
 }
 
@@ -878,16 +857,13 @@ func (m model) pendingTerminalTranscriptOutput(width int) (string, int) {
 	return strings.Join(lines, "\n"), end
 }
 
-// commitTerminalTranscript 将新的稳定记录写入原生终端历史并推进游标。
+// commitTerminalTranscript 将连续稳定记录打印到普通屏 scrollback，并在打印后执行已有命令。
 func (m model) commitTerminalTranscript(existing tea.Cmd) (model, tea.Cmd) {
 	width := terminalContentWidth(m.width)
 	if width == 0 {
 		return m, existing
 	}
 	output, end := m.pendingTerminalTranscriptOutput(width)
-	if end == m.terminalTranscriptCursor {
-		return m, existing
-	}
 	m.terminalTranscriptCursor = end
 	if output == "" {
 		return m, existing
@@ -1133,18 +1109,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.height = msg.Height
 		if !m.screenInitialized {
 			m.screenInitialized = true
-			m.lastTerminalHeight = msg.Height
-			m, transcriptCmd := m.commitTerminalTranscript(nil)
-			startupCmd := tea.Sequence(
-				tea.ClearScreen,
-				tea.Println(m.startupPrelude()),
-			)
-			return m, sequenceTeaCommands(startupCmd, transcriptCmd)
-		}
-		heightDelta := msg.Height - m.lastTerminalHeight
-		m.lastTerminalHeight = msg.Height
-		if heightDelta > 0 {
-			return m, tea.Println(terminalBlankLines(heightDelta))
+			return m.commitTerminalTranscript(nil)
 		}
 		return m, nil
 	case tea.KeyMsg:

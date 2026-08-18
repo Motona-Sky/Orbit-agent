@@ -1,6 +1,7 @@
 package llm
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -20,12 +21,13 @@ func (e *HTTPStatusError) Error() string {
 }
 
 // RequProvider 根据供应商类型发送 HTTP 请求。
-func RequProvider(apikey string, baseurl string, provider string, data string) (error, string) {
+func RequProvider(ctx context.Context, apikey string, baseurl string, provider string, data string) (error, string) {
 	switch {
 	case provider == "openai:completions":
 		// OpenAI Completion
 		client := req.C()
 		resp, err := client.SetTimeout(30*time.Second).R().
+			SetContext(ctx).
 			SetHeader("Content-Type", "application/json").
 			SetHeaders(map[string]string{ // 一次设置多个请求头。
 
@@ -43,6 +45,7 @@ func RequProvider(apikey string, baseurl string, provider string, data string) (
 	case provider == "openai:responses":
 		client := req.C()
 		resp, err := client.SetTimeout(30*time.Second).R().
+			SetContext(ctx).
 			SetHeader("Content-Type", "application/json").
 			SetHeader("Authorization", "Bearer "+apikey).
 			SetBody(data).

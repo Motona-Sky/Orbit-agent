@@ -117,7 +117,7 @@ func RunAgent(ctx context.Context, agentvalue RunAgentValue, ui *agentui.AgentUI
 	LiftContextLength := contextLength / utils.MaxContextLength
 	if LiftContextLength > 0.7 {
 		var err error
-		req.Memory, err = CompressContext(req.Memory)
+		req.Memory, err = CompressContext(ctx, req.Memory)
 		if err != nil {
 			return err
 		}
@@ -168,7 +168,7 @@ func RunAgent(ctx context.Context, agentvalue RunAgentValue, ui *agentui.AgentUI
 					return nil
 				})
 			} else {
-				requestErr, responseJSON = llm.RequProvider(credential, agentvalue.BaseUrl, agentvalue.Provider, data)
+				requestErr, responseJSON = llm.RequProvider(ctx, credential, agentvalue.BaseUrl, agentvalue.Provider, data)
 			}
 			if requestErr == nil {
 				debug.Record("llm_response", map[string]any{"iteration": AgentiterNum, "attempt": attempt, "body": responseJSON})
@@ -178,17 +178,17 @@ func RunAgent(ctx context.Context, agentvalue RunAgentValue, ui *agentui.AgentUI
 			if errors.Is(requestErr, context.Canceled) {
 				return requestErr
 			}
-			ui.DisplayResult(data)
-			var statusErr *llm.HTTPStatusError
-			if errors.As(requestErr, &statusErr) {
-				return ui.DisplayFinalResult(fmt.Sprintf("HTTP %d: %s", statusErr.StatusCode, statusErr.Status))
-			}
-
 			if attempt == RetryNum {
 				return ui.DisplayResult(fmt.Sprintf("request provider failed after %d attempts: %s", RetryNum, requestErr.Error()))
 			}
 			ui.DisplayThinking(fmt.Sprintf("try %d   %s", attempt, requestErr.Error()))
-			time.Sleep(10 * time.Second)
+			timer := time.NewTimer(10 * time.Second)
+			select {
+			case <-ctx.Done():
+				timer.Stop()
+				return ctx.Err()
+			case <-timer.C:
+			}
 		}
 		// 解析响应
 		toolCalls, assistantMemory, usage, err := ParseResponse(req.Provider, responseJSON)
@@ -269,7 +269,7 @@ func RunAgent(ctx context.Context, agentvalue RunAgentValue, ui *agentui.AgentUI
 		LiftContextLength := contextLength / utils.MaxContextLength
 		if LiftContextLength > 0.7 {
 			var err error
-			req.Memory, err = CompressContext(req.Memory)
+			req.Memory, err = CompressContext(ctx, req.Memory)
 			if err != nil {
 				return err
 			}

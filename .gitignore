@@ -51,8 +51,19 @@ $RECYCLE.BIN/
 /build/
 /bin/
 /out/
+/main
+/ttest
 
-# ===== Logs =====
+# ===== Python =====
+__pycache__/
+*.py[cod]
+*$py.class
+
+# ===== Debug & Runtime Cache =====
+.dbg/
+errer
+memorys.json
+q
 *.log
 logs/
 

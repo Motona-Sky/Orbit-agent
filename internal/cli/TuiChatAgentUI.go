@@ -5,6 +5,7 @@ import (
 	"errors"
 	"strconv"
 	"strings"
+	"time"
 
 	"orbit/internal/agentui"
 	"orbit/internal/event"
@@ -59,6 +60,7 @@ func finishAgentRun(ui *agentui.AgentUI, errorLabel string, runErr error) agentR
 }
 
 func (m model) handleAgentUIEvent(msg agentui.Event) (tea.Model, tea.Cmd) {
+	m.markRunningActivity(time.Now())
 	switch msg := msg.(type) {
 	case agentui.ResultEvent:
 		m.clearPendingUserTranscript()

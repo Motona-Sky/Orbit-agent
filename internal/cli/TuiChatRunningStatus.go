@@ -16,10 +16,11 @@ const (
 )
 
 type runningStatusState struct {
-	generation uint64
-	startedAt  time.Time
-	elapsed    time.Duration
-	frame      int
+	generation     uint64
+	startedAt      time.Time
+	lastActivityAt time.Time
+	elapsed        time.Duration
+	frame          int
 }
 
 type runningStatusTickMsg struct {
@@ -36,6 +37,7 @@ func scheduleRunningStatusTick(generation uint64) tea.Cmd {
 func (m *model) startRunningStatus(now time.Time) tea.Cmd {
 	m.runningStatus.generation++
 	m.runningStatus.startedAt = now
+	m.runningStatus.lastActivityAt = now
 	m.runningStatus.elapsed = 0
 	m.runningStatus.frame = 0
 	return scheduleRunningStatusTick(m.runningStatus.generation)
@@ -43,8 +45,16 @@ func (m *model) startRunningStatus(now time.Time) tea.Cmd {
 
 func (m *model) stopRunningStatus() {
 	m.runningStatus.startedAt = time.Time{}
+	m.runningStatus.lastActivityAt = time.Time{}
 	m.runningStatus.elapsed = 0
 	m.runningStatus.frame = 0
+}
+
+func (m *model) markRunningActivity(now time.Time) {
+	if m.runningStatus.startedAt.IsZero() {
+		return
+	}
+	m.runningStatus.lastActivityAt = now
 }
 
 func (m model) handleRunningStatusTick(msg runningStatusTickMsg) (model, tea.Cmd) {
@@ -57,7 +67,11 @@ func (m model) handleRunningStatusTick(msg runningStatusTickMsg) (model, tea.Cmd
 		elapsed = 0
 	}
 	m.runningStatus.elapsed = elapsed
-	if elapsed >= runningTurnTimeout {
+	idleElapsed := msg.now.Sub(m.runningStatus.lastActivityAt)
+	if idleElapsed < 0 {
+		idleElapsed = 0
+	}
+	if idleElapsed >= runningTurnTimeout {
 		m.closeAgentUI()
 		m.clearPendingUserTranscript()
 		m.running = false

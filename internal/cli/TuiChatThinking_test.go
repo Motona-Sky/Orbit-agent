@@ -8,6 +8,7 @@ import (
 
 	"orbit/internal/agentui"
 
+	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/x/ansi"
 )
 
@@ -135,6 +136,9 @@ func TestResultEventDisplaysWithoutEndingTurn(t *testing.T) {
 
 func TestFinalResultEventEndsTurnAfterMultipleResults(t *testing.T) {
 	m := NewModelForLanguage("zh-CN")
+	m.width = 80
+	m.height = 24
+	m.screenInitialized = true
 	m.running = true
 	m.agentUI = agentui.New()
 	m.thinkingText = "正在收尾"
@@ -149,6 +153,9 @@ func TestFinalResultEventEndsTurnAfterMultipleResults(t *testing.T) {
 	if m.running || m.agentUI != nil || m.thinkingText != "" {
 		t.Fatalf("final state = running %v, ui nil %v, thinking %q", m.running, m.agentUI == nil, m.thinkingText)
 	}
+	if !m.composer.Focused() {
+		t.Fatal("composer lost focus after final result")
+	}
 	if len(m.transcript) != 3 {
 		t.Fatalf("transcript length = %d, want 3", len(m.transcript))
 	}
@@ -156,6 +163,132 @@ func TestFinalResultEventEndsTurnAfterMultipleResults(t *testing.T) {
 		if m.transcript[index].content != want {
 			t.Fatalf("transcript[%d] = %q, want %q", index, m.transcript[index].content, want)
 		}
+	}
+	view := ansi.Strip(m.View())
+	for _, want := range []string{m.messages.Chat.ComposerTitle, m.messages.Chat.AgentCommandPlaceholder} {
+		if !strings.Contains(view, want) {
+			t.Fatalf("view after final result missing composer text %q: %q", want, view)
+		}
+	}
+	if strings.Contains(view, "最终回答") {
+		t.Fatalf("stable final result repeated in dynamic view: %q", view)
+	}
+	if len(strings.Split(view, "\n")) > m.height {
+		t.Fatalf("view height exceeds terminal height %d: %q", m.height, view)
+	}
+	if !strings.Contains(view, m.messages.Chat.AgentCommandPrompt) || !strings.Contains(view, m.messages.Chat.AgentCommandPlaceholder) {
+		t.Fatalf("view lost composer after final result: %q", view)
+	}
+}
+
+func TestManagedTranscriptRendersPendingStreamOnce(t *testing.T) {
+	m := NewModelForLanguage("zh-CN")
+	m.transcript = append(m.transcript, chatTranscriptEntry{
+		kind: transcriptMessage, role: "assistant", content: "唯一流式标记", pending: true,
+	})
+	m.streamingResultIndex = 0
+
+	view := ansi.Strip(m.renderInlineStatus(80))
+	if count := strings.Count(view, "唯一流式标记"); count != 1 {
+		t.Fatalf("pending stream count = %d, want 1: %q", count, view)
+	}
+}
+
+func TestCommitTerminalTranscriptAdvancesCursorAndPreservesExistingCommand(t *testing.T) {
+	m := NewModelForLanguage("zh-CN")
+	m.width = 80
+	m.transcript = append(m.transcript, chatTranscriptEntry{
+		kind: transcriptMessage, role: "assistant", content: "已完成回答",
+	})
+
+	updated, cmd := m.commitTerminalTranscript(nil)
+	if cmd == nil {
+		t.Fatal("commitTerminalTranscript did not return a print command")
+	}
+	if updated.terminalTranscriptCursor != 1 {
+		t.Fatalf("cursor = %d, want 1", updated.terminalTranscriptCursor)
+	}
+
+	updated, cmd = updated.commitTerminalTranscript(nil)
+	if cmd != nil {
+		t.Fatal("second commit unexpectedly returned a command")
+	}
+
+	type existingMsg struct{}
+	existing := func() tea.Msg { return existingMsg{} }
+	updated.transcript = append(updated.transcript, chatTranscriptEntry{
+		kind: transcriptMessage, role: "assistant", content: "下一条回答",
+	})
+	updated, cmd = updated.commitTerminalTranscript(existing)
+	if cmd == nil {
+		t.Fatal("commitTerminalTranscript dropped print/existing command sequence")
+	}
+	if updated.terminalTranscriptCursor != 2 {
+		t.Fatalf("cursor = %d, want 2", updated.terminalTranscriptCursor)
+	}
+}
+
+func TestCommitTerminalTranscriptAdvancesPastStableEmptyEntry(t *testing.T) {
+	m := NewModelForLanguage("zh-CN")
+	m.width = 80
+	m.transcript = append(m.transcript, chatTranscriptEntry{
+		kind: transcriptQuestion, content: "未回答问题",
+	})
+
+	type existingMsg struct{}
+	existing := func() tea.Msg { return existingMsg{} }
+	updated, cmd := m.commitTerminalTranscript(existing)
+	if updated.terminalTranscriptCursor != 1 {
+		t.Fatalf("cursor = %d, want 1", updated.terminalTranscriptCursor)
+	}
+	if cmd == nil {
+		t.Fatal("empty rendered entry dropped existing command")
+	}
+	if _, ok := cmd().(existingMsg); !ok {
+		t.Fatalf("existing command result = %T, want existingMsg", cmd())
+	}
+}
+
+func TestSetupErrorCommitsOnlyWhenLeavingAltScreen(t *testing.T) {
+	m := NewModelForLanguage("zh-CN")
+	m.width = 80
+	m.modelSetup = &ConfigModelModel{}
+
+	updated, reportCmd := m.reportModelSetupError(errors.New("setup failed"))
+	if reportCmd != nil || updated.terminalTranscriptCursor != 0 {
+		t.Fatalf("report advanced cursor before alt-screen exit: cmd nil %v, cursor %d", reportCmd == nil, updated.terminalTranscriptCursor)
+	}
+	updated.modelSetup = nil
+	updated, exitCmd := updated.finishSetupScreenExit(nil)
+	if exitCmd == nil {
+		t.Fatal("setup exit did not sequence alt-screen exit and transcript print")
+	}
+	if updated.terminalTranscriptCursor != 1 {
+		t.Fatalf("cursor after setup exit = %d, want 1", updated.terminalTranscriptCursor)
+	}
+}
+
+func TestShortScreenChatKeepsInputVisibleAfterLongStreamingAnswer(t *testing.T) {
+	m := NewModelForLanguage("zh-CN")
+	m.width = 80
+	m.height = 6
+	m.screenInitialized = true
+	m.transcript = append(m.transcript, chatTranscriptEntry{
+		kind:    transcriptMessage,
+		role:    "assistant",
+		content: strings.Repeat("很长的流式回答内容 ", 80),
+		pending: true,
+	})
+	m.streamingResultIndex = 0
+
+	view := ansi.Strip(m.View())
+	lines := strings.Split(view, "\n")
+	if len(lines) != m.height {
+		t.Fatalf("short view height = %d, want %d: %q", len(lines), m.height, view)
+	}
+	lastLine := lines[len(lines)-1]
+	if !strings.Contains(lastLine, m.messages.Chat.AgentCommandPrompt) || !strings.Contains(lastLine, m.messages.Chat.AgentCommandPlaceholder) {
+		t.Fatalf("short view last line lost input: %q", lastLine)
 	}
 }
 

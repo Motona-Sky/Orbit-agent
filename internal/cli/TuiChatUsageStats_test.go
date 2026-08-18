@@ -6,8 +6,41 @@ import (
 
 	"orbit/internal/agentui"
 
+	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/x/ansi"
 )
+
+func TestChatFirstWindowSizeCommitsHistoryAndLaterResizeOnlyUpdatesSize(t *testing.T) {
+	m := NewModelForLanguage("zh-CN")
+	m.transcript = append(m.transcript, chatTranscriptEntry{
+		kind: transcriptMessage, role: "assistant", content: "历史回答",
+	})
+
+	updated, cmd := m.Update(tea.WindowSizeMsg{Width: 80, Height: 24})
+	m = updated.(model)
+	if cmd == nil {
+		t.Fatal("first valid resize did not commit existing history")
+	}
+	if !m.screenInitialized || m.width != 80 || m.height != 24 || m.terminalTranscriptCursor != 1 {
+		t.Fatalf("first resize state = initialized %v, size %dx%d, cursor %d", m.screenInitialized, m.width, m.height, m.terminalTranscriptCursor)
+	}
+	view := ansi.Strip(m.View())
+	if strings.Contains(view, "历史回答") {
+		t.Fatalf("stable history repeated in dynamic view: %q", view)
+	}
+	if !strings.Contains(view, m.messages.Chat.AgentCommandPlaceholder) {
+		t.Fatalf("first resize lost composer: %q", view)
+	}
+
+	updated, cmd = m.Update(tea.WindowSizeMsg{Width: 100, Height: 30})
+	m = updated.(model)
+	if cmd != nil {
+		t.Fatal("later resize unexpectedly reprinted transcript")
+	}
+	if m.width != 100 || m.height != 30 || m.terminalTranscriptCursor != 1 {
+		t.Fatalf("later resize state = size %dx%d, cursor %d", m.width, m.height, m.terminalTranscriptCursor)
+	}
+}
 
 func TestUsagePanelShowsStatsAndTasks(t *testing.T) {
 	m := NewModelForLanguage("zh-CN")

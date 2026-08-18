@@ -24,11 +24,11 @@ func GetModelList() ([]string, error) {
 	if err != nil {
 		return nil, err
 	}
+	if provider.Auth == "codex" {
+		return []string{"gpt-5.6-sol", "gpt-5.6-terra", "gpt-5.6-luna", "gpt-5.5"}, nil
+	}
 	baseURL := strings.TrimRight(provider.BaseURL, "/")
 	credential := provider.ApiKey
-	if provider.Auth == "codex" && strings.TrimSpace(credential) == "" {
-		credential = provider.AccessToken
-	}
 	request := req.C().SetTimeout(15 * time.Second).R()
 	modelURL := baseURL + "/models"
 	switch {
@@ -40,16 +40,6 @@ func GetModelList() ([]string, error) {
 		}
 		request.SetHeader("x-api-key", credential).
 			SetHeader("anthropic-version", "2023-06-01")
-	case provider.Auth == "codex":
-		modelURL = baseURL + "/codex/models"
-		request.SetQueryParam("client_version", "0.144.1").
-			SetHeader("Authorization", "Bearer "+credential).
-			SetHeader("Accept", "application/json").
-			SetHeader("Originator", "codex_cli_rs").
-			SetHeader("User-Agent", "codex_cli_rs/0.144.1")
-		if strings.TrimSpace(provider.AccountID) != "" {
-			request.SetHeader("ChatGPT-Account-Id", provider.AccountID)
-		}
 	default:
 		if !strings.HasSuffix(baseURL, "/v1") {
 			modelURL = baseURL + "/v1/models"

@@ -62,11 +62,13 @@ func (m model) handleSlashMessageSubmit(value string) (model, tea.Cmd) {
 func (m model) startModelSetup() (model, tea.Cmd) {
 	appConfig, err := config.LoadAppConfig()
 	if err != nil {
-		return m.reportModelSetupError(fmt.Errorf("load model config: %w", err))
+		m, _ = m.reportModelSetupError(fmt.Errorf("load model config: %w", err))
+		return m.commitTerminalTranscript(nil)
 	}
 	provider, err := config.LoadDefaultProviderConfig()
 	if err != nil {
-		return m.reportModelSetupError(fmt.Errorf("load default provider: %w", err))
+		m, _ = m.reportModelSetupError(fmt.Errorf("load default provider: %w", err))
+		return m.commitTerminalTranscript(nil)
 	}
 	setup := initialConfigModelForLanguage(appConfig.Language, provider.Model)
 	m.modelSetupRequestID++
@@ -130,7 +132,8 @@ func (m model) leaveModelSetup(setupErr error) (model, tea.Cmd) {
 func (m model) startProviderSetup() (model, tea.Cmd) {
 	appConfig, err := config.LoadAppConfig()
 	if err != nil {
-		return m.reportModelSetupError(fmt.Errorf("load provider config: %w", err))
+		m, _ = m.reportModelSetupError(fmt.Errorf("load provider config: %w", err))
+		return m.commitTerminalTranscript(nil)
 	}
 	setup := initialConfigProviderForLanguageWithConfig(appConfig.Language, appConfig)
 	setup.terminalWidth = m.width
@@ -186,15 +189,8 @@ func (m model) leaveProviderSetup(setupErr error) (model, tea.Cmd) {
 }
 
 func (m model) finishSetupScreenExit(afterExit tea.Cmd) (model, tea.Cmd) {
-	exitCmd := tea.Cmd(tea.ExitAltScreen)
-	if m.screenInitialized && m.lastTerminalHeight > 0 {
-		heightDelta := m.height - m.lastTerminalHeight
-		m.lastTerminalHeight = m.height
-		if heightDelta > 0 {
-			exitCmd = sequenceTeaCommands(exitCmd, tea.Println(terminalBlankLines(heightDelta)))
-		}
-	}
-	return m, sequenceTeaCommands(exitCmd, afterExit)
+	m, afterExit = m.commitTerminalTranscript(afterExit)
+	return m, sequenceTeaCommands(tea.ExitAltScreen, afterExit)
 }
 
 func (m model) reportModelSetupError(err error) (model, tea.Cmd) {
@@ -202,7 +198,7 @@ func (m model) reportModelSetupError(err error) (model, tea.Cmd) {
 		kind: transcriptMessage, role: "assistant",
 		content: m.messages.Chat.AgentErrorLabel + err.Error(),
 	})
-	return m.commitTerminalTranscript(nil)
+	return m, nil
 }
 
 func sequenceTeaCommands(first, second tea.Cmd) tea.Cmd {

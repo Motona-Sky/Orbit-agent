@@ -141,7 +141,7 @@ func runChatLoopWithoutMcp(manager *mcp.Manager) error {
 	}
 }
 
-// newChatProgram 使用普通终端屏幕启动主聊天，并允许测试注入输入输出选项。
+// newChatProgram 在普通屏中启动主聊天，并允许调用者注入程序选项。
 func newChatProgram(initial tea.Model, options ...tea.ProgramOption) *tea.Program {
 	return tea.NewProgram(initial, options...)
 }

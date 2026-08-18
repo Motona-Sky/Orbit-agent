@@ -1,6 +1,7 @@
 package agent
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -20,11 +21,11 @@ func GetConLength(provider string, usage map[string]any) float64 {
 	}
 	return 0
 }
-func CompressContext(context []llm.MemoryMessage) ([]llm.MemoryMessage, error) {
+func CompressContext(ctx context.Context, messages []llm.MemoryMessage) ([]llm.MemoryMessage, error) {
 	var newContext []llm.MemoryMessage
 	var tmpContext []llm.MemoryMessage
 
-	for _, v := range context {
+	for _, v := range messages {
 		switch v.Role {
 		case "system":
 			newContext = append(newContext, v)
@@ -41,7 +42,7 @@ func CompressContext(context []llm.MemoryMessage) ([]llm.MemoryMessage, error) {
 			}
 
 			// 没有工具调用，认为这是这一轮的最终回答。
-			comcon, err := requestSummary(tmpContext)
+			comcon, err := requestSummary(ctx, tmpContext)
 			if err != nil {
 				return nil, err
 			}
@@ -65,7 +66,7 @@ func CompressContext(context []llm.MemoryMessage) ([]llm.MemoryMessage, error) {
 }
 
 // requestSummary 序列化旧消息并请求 LLM 生成摘要。
-func requestSummary(old []llm.MemoryMessage) (string, error) {
+func requestSummary(ctx context.Context, old []llm.MemoryMessage) (string, error) {
 	input, err := json.Marshal(old)
 	if err != nil {
 		return "", fmt.Errorf("marshal old messages: %w", err)
@@ -94,7 +95,7 @@ Submit the summary as role: assistant. The original input remains role: user.
 	if err != nil {
 		return "", fmt.Errorf("gen compress req err: %w", err)
 	}
-	err, respJSON := llm.RequProvider(utils.ApiKey, utils.BaseUrl, utils.Provider, data)
+	err, respJSON := llm.RequProvider(ctx, utils.ApiKey, utils.BaseUrl, utils.Provider, data)
 	if err != nil {
 		return "", err
 	}
