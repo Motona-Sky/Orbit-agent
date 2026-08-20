@@ -2,6 +2,7 @@ package prompt
 
 import (
 	"fmt"
+	"orbit/internal/memorys"
 	"orbit/internal/skills"
 	"orbit/internal/utils"
 	"os"
@@ -84,7 +85,6 @@ var (
 	RuntimeEnvironment             string
 	AdditionalProjectDocumentation string
 	SkillsAvailable                string
-	DefaultSystemPrompt            string
 )
 
 func InitRuntimeEnvironment() {
@@ -117,5 +117,13 @@ func init() {
 	InitSkillsAvailable()
 	InitRuntimeEnvironment()
 	InitAdditionalProjectDocumentation()
-	DefaultSystemPrompt = fmt.Sprintf("%s\n%s\n%s\n%s\n%s\n%s\n%s", BasicSetup, CodeModificationGuidelines, ProjectReadingandModificationGuide, MemoryRulesPrompt, RuntimeEnvironment, AdditionalProjectDocumentation, SkillsAvailable)
+}
+
+// BuildSystemPrompt 动态构建系统提示词，每次调用时注入最新的用户长期记忆。
+func BuildSystemPrompt() string {
+	memorySection := MemoryRulesPrompt
+	if saved := memorys.GetUserMemorysPrompt(); saved != "" {
+		memorySection += fmt.Sprintf("\n## Current Saved Memories\n%s", saved)
+	}
+	return fmt.Sprintf("%s\n%s\n%s\n%s\n%s\n%s\n%s", BasicSetup, CodeModificationGuidelines, ProjectReadingandModificationGuide, memorySection, RuntimeEnvironment, AdditionalProjectDocumentation, SkillsAvailable)
 }

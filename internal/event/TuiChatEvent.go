@@ -34,7 +34,7 @@ func runAgentValueForEvent(chatmessages TuiEvent) agent.RunAgentValue {
 		ThinkLevel:    chatmessages.ThinkLevel,
 		Model:         utils.Model,
 		BaseUrl:       utils.BaseUrl,
-		SystemPt:      prompt.DefaultSystemPrompt,
+		SystemPt:      prompt.BuildSystemPrompt(),
 		UserInput:     chatmessages.Text,
 		ResumeSession: chatmessages.ResumeSession,
 	}

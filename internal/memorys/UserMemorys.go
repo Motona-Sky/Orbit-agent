@@ -15,8 +15,8 @@ import (
 var userMemMu sync.Mutex
 
 type UserMemory struct {
-	Num         int            `json:"num"`
-	UserMemorys map[int]string `json:"user_memorys"`
+	Num     int    `json:"num"`
+	Content string `json:"content"`
 }
 
 type UserMemorys []UserMemory
@@ -57,10 +57,8 @@ func AddUserMemorys(userMemory string) error {
 	}
 	// 添加一条新记忆
 	u = append(u, UserMemory{
-		Num: nextNum,
-		UserMemorys: map[int]string{
-			nextNum: userMemory,
-		},
+		Num:     nextNum,
+		Content: userMemory,
 	})
 
 	// 转换成 JSON
@@ -99,7 +97,7 @@ func GetUserMemorysPrompt() string {
 		return ""
 	}
 	for num, item := range userMemorys {
-		prompt += fmt.Sprintf("%d.  %s\n", num+1, item.UserMemorys[item.Num])
+		prompt += fmt.Sprintf("%d.  %s\n", num+1, item.Content)
 	}
 	return prompt
 }
@@ -122,9 +120,7 @@ func DelUserMemorys(num int) error {
 	newNum := 1
 	for _, item := range u {
 		if item.Num != num {
-			oldNum := item.Num
 			item.Num = newNum
-			item.UserMemorys = map[int]string{newNum: item.UserMemorys[oldNum]}
 			filtered = append(filtered, item)
 			newNum++
 		}
@@ -139,14 +135,13 @@ func DelUserMemorys(num int) error {
 }
 func UpdateUserMemory(addumem string, delumem int) string {
 	if delumem != 0 {
-		DelUserMemorys(delumem)
+		if err := DelUserMemorys(delumem); err != nil {
+			return fmt.Sprintf("delete memory #%d failed: %s", delumem, err.Error())
+		}
 	}
 	if addumem != "" {
-		err := AddUserMemorys(addumem)
-		if err != nil {
-			if err.Error() == "user memory limit reached (maximum: 10)" {
-				return "user memory limit reached (maximum: 10)"
-			}
+		if err := AddUserMemorys(addumem); err != nil {
+			return fmt.Sprintf("add memory failed: %s", err.Error())
 		}
 	}
 	Usermem := GetUserMemorysPrompt()
@@ -184,11 +179,11 @@ func GetLsParameters() tools.ToolParameters {
 	}
 	Delumem := tools.ToolPropertiesArray{
 		Type:        "integer",
-		Description: "Delete a single Usermemory",
+		Description: "Delete a single Usermemory by its number",
 	}
 	ToolProperties := map[string]tools.ToolPropertiesArray{
-		"Addumem": Addumem,
-		"Delumem": Delumem,
+		"addumem": Addumem,
+		"delumem": Delumem,
 	}
 	return tools.ToolParameters{
 		Type:                 "object",
