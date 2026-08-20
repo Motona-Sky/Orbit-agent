@@ -7,7 +7,7 @@
 
 [English](README_EN.md) | [简体中文](README.md)
 
-[✨ Features](#-features) • [🚀 Quick Start](#-quick-start) • [🛠️ Architecture](#️-architecture) • [⌨️ Slash Commands](#️-slash-commands) • [🧩 MCP & Skills](#-mcp--skills-extension) • [🤝 Contributing](#-contributing)
+[✨ Features](#-features) • [🚀 Quick Start](#-installation) • [⌨️ Commands](#️-slash-commands) • [🧩 MCP & Skills](#-mcp--skills-extension) • [🤝 Contributing](#-contributing)
 
 ---
 
@@ -229,7 +229,7 @@ This project is licensed under the [MIT License](LICENSE).
 
 ## 💬 Community
 
-![qq](access/qrcode_1787224160689.jpg)
+![qq](./access/qrcode_1787224160689.jpg)
 
 ---
 
