@@ -117,5 +117,5 @@ func init() {
 	InitSkillsAvailable()
 	InitRuntimeEnvironment()
 	InitAdditionalProjectDocumentation()
-	DefaultSystemPrompt = fmt.Sprintf("%s\n%s\n%s\n%s\n%s\n%s", BasicSetup, CodeModificationGuidelines, ProjectReadingandModificationGuide, RuntimeEnvironment, AdditionalProjectDocumentation, SkillsAvailable)
+	DefaultSystemPrompt = fmt.Sprintf("%s\n%s\n%s\n%s\n%s\n%s\n%s", BasicSetup, CodeModificationGuidelines, ProjectReadingandModificationGuide, MemoryRulesPrompt, RuntimeEnvironment, AdditionalProjectDocumentation, SkillsAvailable)
 }

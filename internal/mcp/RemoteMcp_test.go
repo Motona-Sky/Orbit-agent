@@ -91,8 +91,11 @@ func TestLoadMCPConfigTracksOverrideSourceAndDefaultsEnabled(t *testing.T) {
 	if cfg.MCPServers["shared"].Command != "project" || sources["shared"] != projectPath {
 		t.Fatalf("override/source = %#v, %q", cfg.MCPServers["shared"], sources["shared"])
 	}
-	if !cfg.MCPServers["shared"].IsEnabled() || !cfg.MCPServers["global"].IsEnabled() {
-		t.Fatal("missing enabled should default to true")
+	if cfg.MCPServers["shared"].IsEnabled() {
+		t.Fatal("project server missing enabled should default to false")
+	}
+	if !cfg.MCPServers["global"].IsEnabled() {
+		t.Fatal("global server missing enabled should default to true")
 	}
 }
 

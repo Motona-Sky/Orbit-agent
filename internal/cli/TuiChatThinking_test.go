@@ -32,6 +32,36 @@ func TestAssistantTranscriptRendersMarkdown(t *testing.T) {
 	}
 }
 
+func TestMarkdownSupportsHeadingWithoutSpaceAndFencedCode(t *testing.T) {
+	lines := renderTerminalMarkdown("##标题\n\n```go\nfmt.Println(\"ok\")\n```", 80)
+	plain := ansi.Strip(strings.Join(lines, "\n"))
+
+	for _, marker := range []string{"##标题", "## 标题", "```"} {
+		if strings.Contains(plain, marker) {
+			t.Fatalf("rendered Markdown kept marker %q: %q", marker, plain)
+		}
+	}
+	for _, want := range []string{"标题", "fmt.Println(\"ok\")"} {
+		if !strings.Contains(plain, want) {
+			t.Fatalf("rendered Markdown missing %q: %q", want, plain)
+		}
+	}
+}
+
+func TestMarkdownNormalizationPreservesCodeContent(t *testing.T) {
+	input := "##标题\n\n```c\n#define VALUE 1\n##not-a-heading\n```\n\n    ## indented code"
+	normalized := normalizeTerminalMarkdown(input)
+
+	if !strings.HasPrefix(normalized, "## 标题") {
+		t.Fatalf("heading was not normalized: %q", normalized)
+	}
+	for _, want := range []string{"#define VALUE 1", "##not-a-heading", "    ## indented code"} {
+		if !strings.Contains(normalized, want) {
+			t.Fatalf("normalization changed code content %q: %q", want, normalized)
+		}
+	}
+}
+
 func TestMarkdownCodeBlockHasNoBackgroundColor(t *testing.T) {
 	lines := renderTerminalMarkdown("```go\nfmt.Println(\"ok\")\n```", 80)
 	rendered := strings.Join(lines, "\n")
@@ -44,17 +74,24 @@ func TestMarkdownCodeBlockHasNoBackgroundColor(t *testing.T) {
 	}
 }
 
-func TestPendingAssistantTranscriptUsesLightweightRendering(t *testing.T) {
+func TestPendingAssistantTranscriptRendersMarkdown(t *testing.T) {
 	m := NewModelForLanguage("zh-CN")
 	lines := m.renderTranscriptEntry(80, chatTranscriptEntry{
 		role:    "assistant",
-		content: "# 尚未完成\n\n**流式内容**",
+		content: "##尚未完成\n\n```go\nfmt.Println(\"流式内容\")\n```",
 		pending: true,
 	})
 	rendered := ansi.Strip(strings.Join(lines, "\n"))
 
-	if !strings.Contains(rendered, "# 尚未完成") || !strings.Contains(rendered, "**流式内容**") {
-		t.Fatalf("pending assistant content was parsed or lost: %q", rendered)
+	for _, marker := range []string{"##尚未完成", "## 尚未完成", "```"} {
+		if strings.Contains(rendered, marker) {
+			t.Fatalf("pending Markdown kept marker %q: %q", marker, rendered)
+		}
+	}
+	for _, want := range []string{"尚未完成", "fmt.Println(\"流式内容\")"} {
+		if !strings.Contains(rendered, want) {
+			t.Fatalf("pending Markdown missing %q: %q", want, rendered)
+		}
 	}
 }
 
@@ -87,7 +124,7 @@ func TestThinkingEventReplacesAndClearsWithoutTranscript(t *testing.T) {
 
 	updated, _ := m.Update(agentui.ThinkingEvent{Text: "  正在读取\n 配置  "})
 	m = updated.(model)
-	if m.thinkingText != "正在读取 配置" {
+	if m.thinkingText != "正在读取\n配置" {
 		t.Fatalf("first thinking text = %q", m.thinkingText)
 	}
 
@@ -101,6 +138,46 @@ func TestThinkingEventReplacesAndClearsWithoutTranscript(t *testing.T) {
 	m = updated.(model)
 	if m.thinkingText != "" {
 		t.Fatalf("blank event left thinking text %q", m.thinkingText)
+	}
+}
+
+func TestThinkingTextPreservesMeaningfulLines(t *testing.T) {
+	m := NewModelForLanguage("zh-CN")
+	m.setThinkingText(" \n  第一行  \n\n  第二行\t \n ")
+
+	if m.thinkingText != "第一行\n\n第二行" {
+		t.Fatalf("thinking text = %q", m.thinkingText)
+	}
+}
+
+func TestRenderThinkingTextShowsCompleteMultilineTextAtNarrowWidth(t *testing.T) {
+	m := NewModelForLanguage("zh-CN")
+	m.setThinkingText("第一行内容\n第二行内容")
+
+	rendered := ansi.Strip(m.renderThinkingText(5))
+	lines := strings.Split(rendered, "\n")
+	if len(lines) < 4 {
+		t.Fatalf("rendered lines = %#v, want wrapped multiline text", lines)
+	}
+	for index, line := range lines {
+		if width := ansi.StringWidth(line); width > 5 {
+			t.Fatalf("line %d width = %d, want at most 5: %q", index, width, line)
+		}
+	}
+	if got := strings.ReplaceAll(strings.ReplaceAll(rendered, "\n", ""), " ", ""); got != "第一行内容第二行内容" {
+		t.Fatalf("rendered text was truncated: %q", rendered)
+	}
+
+	m.running = true
+	tree := ansi.Strip(m.renderRuntimeActivityTree(8))
+	plainTree := strings.NewReplacer("\n", "", " ", "", "◉", "", "ORBIT", "", "├─", "", "└─", "").Replace(tree)
+	if plainTree != "第一行内容第二行内容" {
+		t.Fatalf("runtime tree lost thinking text: %q", tree)
+	}
+	for index, line := range strings.Split(tree, "\n") {
+		if width := ansi.StringWidth(line); width > 8 {
+			t.Fatalf("tree line %d width = %d, want at most 8: %q", index, width, line)
+		}
 	}
 }
 
@@ -156,8 +233,17 @@ func TestResultEventDisplaysWithoutEndingTurn(t *testing.T) {
 	if m.thinkingText != "正在调用工具" {
 		t.Fatalf("non-final result cleared thinking text %q", m.thinkingText)
 	}
-	if len(m.transcript) != 2 || m.transcript[1].content != "先检查配置。" {
+	if len(m.transcript) != 2 {
 		t.Fatalf("transcript = %#v", m.transcript)
+	}
+	if m.transcript[0].kind != transcriptActivity || m.transcript[0].activityKind != agentui.ActivityTool || m.transcript[0].content != "检查配置" {
+		t.Fatalf("archived activity = %#v", m.transcript[0])
+	}
+	if m.transcript[1].kind != transcriptMessage || m.transcript[1].content != "先检查配置。" {
+		t.Fatalf("assistant result = %#v", m.transcript[1])
+	}
+	if len(m.activities) != 0 || m.activitiesExpanded {
+		t.Fatalf("runtime activities not reset: %#v, expanded %v", m.activities, m.activitiesExpanded)
 	}
 	status := ansi.Strip(m.renderInlineStatus(100))
 	if strings.Contains(status, "ORBIT") {
@@ -168,6 +254,33 @@ func TestResultEventDisplaysWithoutEndingTurn(t *testing.T) {
 	}
 	if cmd == nil {
 		t.Fatal("non-final result did not wait for the next agent UI event")
+	}
+}
+
+func TestAppendActivitySummaryArchivesActivityDetailsInOrder(t *testing.T) {
+	m := NewModelForLanguage("zh-CN")
+	m.recordActivity(agentui.ActivityEvent{Kind: agentui.ActivityFile, Target: "config.go"})
+	m.recordActivity(agentui.ActivityEvent{Kind: agentui.ActivityTool, Target: "检查配置"})
+
+	m.appendActivitySummary()
+
+	if len(m.transcript) != 2 {
+		t.Fatalf("transcript = %#v", m.transcript)
+	}
+	for index, want := range []struct {
+		kind    agentui.ActivityKind
+		content string
+	}{
+		{kind: agentui.ActivityFile, content: "config.go"},
+		{kind: agentui.ActivityTool, content: "检查配置"},
+	} {
+		entry := m.transcript[index]
+		if entry.kind != transcriptActivity || entry.activityKind != want.kind || entry.content != want.content {
+			t.Fatalf("transcript[%d] = %#v", index, entry)
+		}
+	}
+	if len(m.activities) != 0 || m.activitiesExpanded {
+		t.Fatalf("runtime activities not reset: %#v, expanded %v", m.activities, m.activitiesExpanded)
 	}
 }
 
@@ -392,32 +505,36 @@ func TestThinkingRendersAsFirstRuntimeChild(t *testing.T) {
 		}
 	})
 
-	t.Run("with collapsed activities", func(t *testing.T) {
+	t.Run("with activities expanded by default", func(t *testing.T) {
 		m := NewModelForLanguage("zh-CN")
 		m.running = true
 		m.thinkingText = "正在检查配置"
 		m.recordActivity(agentui.ActivityEvent{Kind: agentui.ActivityFile, Target: "config.go"})
 		lines := strings.Split(ansi.Strip(m.renderRuntimeActivityTree(100)), "\n")
-		if len(lines) != 3 || !strings.HasPrefix(lines[1], "├─  ") ||
+		if len(lines) != 4 || !strings.HasPrefix(lines[1], "├─  ") ||
 			!strings.Contains(lines[1], "正在检查配置") ||
-			!strings.HasPrefix(lines[2], "└─ ") || !strings.Contains(lines[2], "1 次工具调用") {
-			t.Fatalf("collapsed tree = %#v", lines)
+			!strings.HasPrefix(lines[2], "├─ ") || !strings.Contains(lines[2], "config.go") ||
+			!strings.HasPrefix(lines[3], "└─ ") || !strings.Contains(lines[3], "Ctrl+O 折叠") {
+			t.Fatalf("default expanded tree = %#v", lines)
 		}
 	})
 
-	t.Run("with expanded activities", func(t *testing.T) {
+	t.Run("new activity restores expanded state", func(t *testing.T) {
 		m := NewModelForLanguage("zh-CN")
 		m.running = true
 		m.thinkingText = "正在验证修改"
 		m.recordActivity(agentui.ActivityEvent{Kind: agentui.ActivityFile, Target: "config.go"})
+		handled, m := m.handleActivityToggle()
+		if !handled || m.activitiesExpanded {
+			t.Fatalf("Ctrl+O toggle state = handled %v, expanded %v", handled, m.activitiesExpanded)
+		}
 		m.recordActivity(agentui.ActivityEvent{Kind: agentui.ActivityTool, Target: "go test"})
-		m.activitiesExpanded = true
 		lines := strings.Split(ansi.Strip(m.renderRuntimeActivityTree(100)), "\n")
 		if len(lines) != 5 || !strings.HasPrefix(lines[1], "├─  ") ||
 			!strings.HasPrefix(lines[2], "├─ ") || !strings.Contains(lines[2], "config.go") ||
 			!strings.HasPrefix(lines[3], "├─ ") || !strings.Contains(lines[3], "go test") ||
 			!strings.HasPrefix(lines[4], "└─ ") || !strings.Contains(lines[4], "Ctrl+O 折叠") {
-			t.Fatalf("expanded tree = %#v", lines)
+			t.Fatalf("restored expanded tree = %#v", lines)
 		}
 	})
 }

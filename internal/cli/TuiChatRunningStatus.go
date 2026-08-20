@@ -11,7 +11,7 @@ import (
 )
 
 const (
-	runningStatusTickInterval = 800 * time.Millisecond
+	runningStatusTickInterval = 2 * time.Second
 	runningTurnTimeout        = 10 * time.Minute
 )
 

@@ -122,12 +122,21 @@ func RunAgent(ctx context.Context, agentvalue RunAgentValue, ui *agentui.AgentUI
 	_ = ui.DisplayUsage(usageStats)
 
 	LiftContextLength := contextLength / utils.MaxContextLength
+	compressCred := CompressCredential{
+		Auth:       agentvalue.Auth,
+		Credential: credential,
+		AccountID:  agentvalue.AccountID,
+		BaseUrl:    agentvalue.BaseUrl,
+		Provider:   agentvalue.Provider,
+		Model:      agentvalue.Model,
+	}
 	if LiftContextLength > 0.7 {
 		var err error
-		req.Memory, err = CompressContext(ctx, req.Memory)
+		req.Memory, err = CompressContext(ctx, req.Memory, compressCred)
 		if err != nil {
 			return err
 		}
+		contextLength = estimateMemoryTokens(req.Memory)
 	}
 	// 压缩上下文
 	//主循环
@@ -199,7 +208,7 @@ func RunAgent(ctx context.Context, agentvalue RunAgentValue, ui *agentui.AgentUI
 				return requestErr
 			}
 			if attempt == RetryNum {
-				return ui.DisplayResult(fmt.Sprintf("request provider failed after %d attempts: %s", RetryNum, requestErr.Error()))
+				return fmt.Errorf("request provider failed after %d attempts: %w", RetryNum, requestErr)
 			}
 			ui.DisplayThinking(fmt.Sprintf("try %d   %s", attempt, requestErr.Error()))
 			timer := time.NewTimer(10 * time.Second)
@@ -213,7 +222,7 @@ func RunAgent(ctx context.Context, agentvalue RunAgentValue, ui *agentui.AgentUI
 		// 解析响应
 		toolCalls, assistantMemory, usage, responseState, err := ParseResponseDetails(req.Provider, responseJSON)
 		if err != nil {
-			return ui.DisplayResult(err.Error())
+			return err
 		}
 		if err := responseState.validate(toolCalls); err != nil {
 			return err
@@ -221,7 +230,7 @@ func RunAgent(ctx context.Context, agentvalue RunAgentValue, ui *agentui.AgentUI
 		debug.Record("parsed_response", map[string]any{"iteration": AgentiterNum, "tool_calls": toolCalls, "assistant_memory": assistantMemory, "usage": usage, "finish_reason": responseState.FinishReason, "status": responseState.Status, "incomplete": responseState.Incomplete})
 		if len(assistantMemory) > 0 && strings.TrimSpace(assistantMemory[0].ReasoningContent) != "" {
 			if err := ui.DisplayThinking(assistantMemory[0].ReasoningContent); err != nil {
-				return ui.DisplayResult(err.Error())
+				return err
 			}
 		}
 		// 存储每日token消耗
@@ -229,7 +238,7 @@ func RunAgent(ctx context.Context, agentvalue RunAgentValue, ui *agentui.AgentUI
 		//上下文长度
 		contextLength = GetConLength(req.Provider, usage)
 		if err := publishDailyUsage(ui, dailyUsage, usageErr); err != nil {
-			return ui.DisplayResult(err.Error())
+			return err
 		}
 		memory = inputMemory
 		memory = memorys.AppendMemoryMessages(memory, assistantMemory)
@@ -237,7 +246,7 @@ func RunAgent(ctx context.Context, agentvalue RunAgentValue, ui *agentui.AgentUI
 		if len(toolCalls) == 0 {
 			//结束循环
 			if len(assistantMemory) == 0 {
-				return ui.DisplayResult("final assistant message is empty")
+				return errors.New("final assistant message is empty")
 			}
 			finalContent := assistantMemory[0].Content
 			if strings.TrimSpace(finalContent) == "" {
@@ -302,13 +311,20 @@ func RunAgent(ctx context.Context, agentvalue RunAgentValue, ui *agentui.AgentUI
 		toolMemory := llm.GettoolCallMemory(toolResults)
 		memory = memorys.AppendMemoryMessages(memory, toolMemory)
 		req.Memory = memory
+
+		// 中间保存：每轮工具调用后保存会话历史，防止崩溃导致数据丢失
+		if jsonMem, err := json.Marshal(memory); err == nil {
+			_ = memorys.SaveChatHistory(jsonMem, SessionId)
+		}
 		LiftContextLength := contextLength / utils.MaxContextLength
 		if LiftContextLength > 0.7 {
 			var err error
-			req.Memory, err = CompressContext(ctx, req.Memory)
+			req.Memory, err = CompressContext(ctx, req.Memory, compressCred)
 			if err != nil {
 				return err
 			}
+			contextLength = estimateMemoryTokens(req.Memory)
+			memory = req.Memory
 		}
 	}
 	return fmt.Errorf("agent stopped after reaching the maximum of %d iterations", maxAgentIterations)
@@ -344,7 +360,7 @@ func makeToolRoundSignature(toolCalls []any, toolResults []tools.ToolResult) (st
 	return string(encoded), nil
 }
 
-const streamUIUpdateInterval = 50 * time.Millisecond
+const streamUIUpdateInterval = 200 * time.Millisecond
 
 func shouldPublishStreamUpdate(lastUpdate *time.Time, now time.Time) bool {
 	if !lastUpdate.IsZero() && now.Sub(*lastUpdate) < streamUIUpdateInterval {

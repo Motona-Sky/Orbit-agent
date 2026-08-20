@@ -6,6 +6,7 @@ import (
 	"orbit/internal/config"
 
 	"github.com/charmbracelet/lipgloss"
+	"github.com/charmbracelet/x/ansi"
 )
 
 type AgentCommandInputCopy struct {
@@ -30,9 +31,9 @@ type AgentCommandInfoItem struct {
 }
 
 type agentCommandStyles struct {
-	prompt, value, placeholder, selectedMode, mode  lipgloss.Style
-	infoMarker, infoLabel, infoValue, infoSeparator lipgloss.Style
-	border, focusedBorder                           lipgloss.Style
+	prompt, value, placeholder, cursor, selectedMode, mode lipgloss.Style
+	infoMarker, infoLabel, infoValue, infoSeparator        lipgloss.Style
+	border, focusedBorder                                  lipgloss.Style
 }
 
 func newAgentCommandStyles(styleConfig config.StyleConfig) agentCommandStyles {
@@ -46,6 +47,7 @@ func newAgentCommandStyles(styleConfig config.StyleConfig) agentCommandStyles {
 		prompt:        lipgloss.NewStyle().Foreground(accent).Bold(true),
 		value:         lipgloss.NewStyle().Foreground(foreground),
 		placeholder:   lipgloss.NewStyle().Foreground(muted),
+		cursor:        lipgloss.NewStyle().Foreground(foreground).Reverse(true),
 		selectedMode:  lipgloss.NewStyle().Foreground(accent).Padding(0, 1),
 		mode:          lipgloss.NewStyle().Foreground(foreground).Padding(0, 1),
 		infoMarker:    lipgloss.NewStyle().Foreground(muted),
@@ -79,18 +81,25 @@ func renderAgentCommandInputLine(copy AgentCommandInputCopy, value string, width
 	prompt := styles.prompt.Render(copy.Prompt)
 	var lines []string
 	if value == "" {
-		lines = []string{prompt + " " + styles.placeholder.Render(copy.Placeholder)}
+		content := styles.placeholder.Render(copy.Placeholder)
+		if focused {
+			content = styles.cursor.Render(" ") + content
+		}
+		lines = []string{prompt + " " + content}
 	} else {
-		lines = renderAgentCommandValue(copy.Prompt, value, styles)
+		lines = renderAgentCommandValue(copy.Prompt, value, focused, styles)
 	}
 
 	return renderAgentCommandBox(copy.Title, lines, width, focused, styles)
 }
 
-func renderAgentCommandValue(prompt, value string, styles agentCommandStyles) []string {
+func renderAgentCommandValue(prompt, value string, focused bool, styles agentCommandStyles) []string {
 	lines := strings.Split(value, "\n")
+	if focused {
+		lines[len(lines)-1] += styles.cursor.Render(" ")
+	}
 	if len(lines) == 1 {
-		return []string{styles.prompt.Render(prompt) + " " + styles.value.Render(value)}
+		return []string{styles.prompt.Render(prompt) + " " + styles.value.Render(lines[0])}
 	}
 
 	indent := strings.Repeat(" ", lipgloss.Width(prompt)+1)
@@ -112,9 +121,14 @@ func renderAgentCommandBox(title string, lines []string, width int, focused bool
 	}
 
 	innerWidth := maxInt(1, width-4)
-	rendered := make([]string, 0, len(lines)+2)
-	rendered = append(rendered, renderAgentCommandTopBorder(title, width, borderStyle, styles))
+	wrappedLines := make([]string, 0, len(lines))
 	for _, line := range lines {
+		wrappedLines = append(wrappedLines, strings.Split(ansi.Hardwrap(line, innerWidth, true), "\n")...)
+	}
+
+	rendered := make([]string, 0, len(wrappedLines)+2)
+	rendered = append(rendered, renderAgentCommandTopBorder(title, width, borderStyle, styles))
+	for _, line := range wrappedLines {
 		rendered = append(rendered, borderStyle.Render("│")+" "+fitStyledLine(line, innerWidth)+" "+borderStyle.Render("│"))
 	}
 	rendered = append(rendered, borderStyle.Render("╰"+strings.Repeat("─", width-2)+"╯"))

@@ -41,6 +41,9 @@ type model struct {
 	screenInitialized bool          // 主聊天是否已收到有效尺寸并可渲染完整终端网格。
 	messages          i18n.Messages // 当前界面使用的文案，默认来自 i18n.DefaultLanguage。
 	styleConfig       config.StyleConfig
+	styleMuted        lipgloss.Style
+	styleAccent       lipgloss.Style
+	stylePureWhite    lipgloss.Style
 
 	transcript               []chatTranscriptEntry
 	terminalTranscriptCursor int
@@ -201,12 +204,16 @@ func initialModel(languageCode string) model {
 	composer.Cursor.SetMode(cursor.CursorStatic)
 	composer.Focus()
 
+	styleConf := loadStyleConfigOrDefault()
 	m := model{
 		composer:             composer,
 		Pwd:                  currentWorkingDirectory(),
 		width:                defaultWidth,
 		messages:             messages,
-		styleConfig:          loadStyleConfigOrDefault(),
+		styleConfig:          styleConf,
+		styleMuted:           lipgloss.NewStyle().Foreground(lipgloss.Color(styleConf.Palette.Muted)),
+		styleAccent:          lipgloss.NewStyle().Foreground(lipgloss.Color(styleConf.Palette.Accent)).Bold(true),
+		stylePureWhite:       lipgloss.NewStyle().Foreground(lipgloss.Color("#ffffff")),
 		historyCursor:        historyCursorIdle,
 		activeQuestion:       historyCursorIdle,
 		streamingResultIndex: historyCursorIdle,
@@ -720,7 +727,7 @@ func (m model) renderPendingAssistantLines(width int, content string, maxLines i
 		content = tailUTF8(content, maxInt(4096, width*maxLines*4))
 	}
 	lines := []string{m.accentStyle().Render(m.messages.Chat.AssistantLabel)}
-	lines = append(lines, strings.Split(ansi.Strip(strings.TrimSpace(content)), "\n")...)
+	lines = append(lines, renderTerminalMarkdown(content, width)...)
 	lines = clampTerminalLines(lines, width)
 	if maxLines > 0 && len(lines) > maxLines {
 		lines = lines[len(lines)-maxLines:]
@@ -982,16 +989,35 @@ func (m model) renderTranscriptEntry(width int, entry chatTranscriptEntry) []str
 	)
 }
 
-func renderTerminalMarkdown(content string, width int) []string {
+// 包级缓存的 Markdown 渲染器，避免每帧重新创建。
+var (
+	cachedMdRenderer      *glamour.TermRenderer
+	cachedMdRendererWidth int
+)
+
+func getTerminalMarkdownRenderer(width int) (*glamour.TermRenderer, error) {
+	if cachedMdRenderer != nil && cachedMdRendererWidth == width {
+		return cachedMdRenderer, nil
+	}
 	renderer, err := glamour.NewTermRenderer(
 		glamour.WithStyles(terminalMarkdownStyle()),
 		glamour.WithWordWrap(width),
 	)
 	if err != nil {
+		return nil, err
+	}
+	cachedMdRenderer = renderer
+	cachedMdRendererWidth = width
+	return renderer, nil
+}
+
+func renderTerminalMarkdown(content string, width int) []string {
+	renderer, err := getTerminalMarkdownRenderer(width)
+	if err != nil {
 		return strings.Split(content, "\n")
 	}
 
-	rendered, err := renderer.Render(content)
+	rendered, err := renderer.Render(normalizeTerminalMarkdown(content))
 	if err != nil {
 		return strings.Split(content, "\n")
 	}
@@ -1002,8 +1028,56 @@ func renderTerminalMarkdown(content string, width int) []string {
 	return strings.Split(rendered, "\n")
 }
 
+func normalizeTerminalMarkdown(content string) string {
+	lines := strings.Split(content, "\n")
+	var fenceMarker byte
+	var fenceLength int
+	for i, line := range lines {
+		trimmed := strings.TrimLeft(line, " ")
+		indent := len(line) - len(trimmed)
+		if indent <= 3 && len(trimmed) >= 3 && (trimmed[0] == '`' || trimmed[0] == '~') {
+			markerLength := 0
+			for markerLength < len(trimmed) && trimmed[markerLength] == trimmed[0] {
+				markerLength++
+			}
+			if markerLength >= 3 {
+				if fenceMarker == 0 {
+					fenceMarker, fenceLength = trimmed[0], markerLength
+				} else if trimmed[0] == fenceMarker && markerLength >= fenceLength && strings.TrimSpace(trimmed[markerLength:]) == "" {
+					fenceMarker, fenceLength = 0, 0
+				}
+				continue
+			}
+		}
+		if fenceMarker != 0 || indent > 3 || strings.HasPrefix(line, "\t") {
+			continue
+		}
+
+		headingEnd := 0
+		for headingEnd < len(trimmed) && headingEnd < 6 && trimmed[headingEnd] == '#' {
+			headingEnd++
+		}
+		// CommonMark requires whitespace after an ATX heading marker. Model
+		// output often omits it for Chinese headings (for example, "##标题").
+		if headingEnd > 0 && headingEnd < len(trimmed) && trimmed[headingEnd] != ' ' && trimmed[headingEnd] != '\t' && trimmed[headingEnd] != '#' {
+			lines[i] = line[:indent] + trimmed[:headingEnd] + " " + trimmed[headingEnd:]
+		}
+	}
+	return strings.Join(lines, "\n")
+}
+
 func terminalMarkdownStyle() glamouransi.StyleConfig {
 	markdownStyle := styles.DarkStyleConfig
+	// Glamour's dark style adds Markdown-like prefixes back to H2-H6
+	// (for example, "## "). Keep headings visually styled without showing
+	// the source markers the renderer just parsed.
+	markdownStyle.H1.Prefix = ""
+	markdownStyle.H1.Suffix = ""
+	markdownStyle.H2.Prefix = ""
+	markdownStyle.H3.Prefix = ""
+	markdownStyle.H4.Prefix = ""
+	markdownStyle.H5.Prefix = ""
+	markdownStyle.H6.Prefix = ""
 	codeColor := "252"
 	markdownStyle.CodeBlock = glamouransi.StyleCodeBlock{
 		StyleBlock: glamouransi.StyleBlock{

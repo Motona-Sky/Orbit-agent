@@ -68,6 +68,39 @@ func ParseResponse(req string, jsonstr string) ([]any, []llm.MemoryMessage, map[
 	return toolCalls, memory, usage, err
 }
 
+func appendUniqueTexts(parts []string, seen map[string]struct{}, value any) []string {
+	switch typed := value.(type) {
+	case string:
+		if typed == "" {
+			return parts
+		}
+		if _, exists := seen[typed]; !exists {
+			seen[typed] = struct{}{}
+			parts = append(parts, typed)
+		}
+	case []any:
+		for _, item := range typed {
+			parts = appendUniqueTexts(parts, seen, item)
+		}
+	case map[string]any:
+		for _, field := range []string{"text", "content", "summary"} {
+			if fieldValue, exists := typed[field]; exists {
+				parts = appendUniqueTexts(parts, seen, fieldValue)
+			}
+		}
+	}
+	return parts
+}
+
+func reasoningText(values ...any) string {
+	parts := make([]string, 0)
+	seen := make(map[string]struct{})
+	for _, value := range values {
+		parts = appendUniqueTexts(parts, seen, value)
+	}
+	return strings.Join(parts, "\n")
+}
+
 // ParseResponseDetails 解析模型响应及供应商提供的结束状态。
 func ParseResponseDetails(req string, jsonstr string) ([]any, []llm.MemoryMessage, map[string]any, ResponseState, error) {
 	var state ResponseState
@@ -93,6 +126,16 @@ func ParseResponseDetails(req string, jsonstr string) ([]any, []llm.MemoryMessag
 		message, ok := choice["message"].(map[string]any)
 		if !ok {
 			return nil, nil, usage, state, errors.New("response message is empty")
+		}
+		reasoningContent := reasoningText(message["reasoning_content"])
+		if reasoningContent == "" {
+			reasoningContent = reasoningText(message["reasoning"])
+		}
+		if reasoningContent == "" {
+			reasoningContent = reasoningText(message["reasoning_details"])
+		}
+		if reasoningContent != "" {
+			message["reasoning_content"] = reasoningContent
 		}
 		assistantJSON, err := json.Marshal(message)
 		if err != nil {
@@ -130,6 +173,7 @@ func ParseResponseDetails(req string, jsonstr string) ([]any, []llm.MemoryMessag
 		toolCalls := make([]any, 0)
 		textParts := make([]string, 0)
 		reasoningParts := make([]string, 0)
+		reasoningSeen := make(map[string]struct{})
 		responseItems := make([]any, 0)
 		for _, value := range output {
 			item, ok := value.(map[string]any)
@@ -156,16 +200,9 @@ func ParseResponseDetails(req string, jsonstr string) ([]any, []llm.MemoryMessag
 				}
 			case "reasoning":
 				responseItems = append(responseItems, item)
-				summary, _ := item["summary"].([]any)
-				for _, summaryValue := range summary {
-					summaryItem, ok := summaryValue.(map[string]any)
-					if !ok {
-						continue
-					}
-					if text, ok := summaryItem["text"].(string); ok {
-						reasoningParts = append(reasoningParts, text)
-					}
-				}
+				reasoningParts = appendUniqueTexts(reasoningParts, reasoningSeen, item["summary"])
+				reasoningParts = appendUniqueTexts(reasoningParts, reasoningSeen, item["content"])
+				reasoningParts = appendUniqueTexts(reasoningParts, reasoningSeen, item["text"])
 			case "function_call":
 				callID, ok := item["call_id"].(string)
 				if !ok || callID == "" {

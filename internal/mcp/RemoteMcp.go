@@ -95,12 +95,15 @@ func loadMcpConfigWithSources() (MCPConfig, map[string]string, error) {
 	if err != nil {
 		return MCPConfig{}, nil, err
 	}
-	for _, path := range paths {
+	for index, path := range paths {
 		cfg, err := loadMcpConfigFile(path)
 		if err != nil {
 			return MCPConfig{}, nil, err
 		}
 		for name, server := range cfg.MCPServers {
+			if server.Enabled == nil {
+				server.Enabled = boolPointer(index == 0)
+			}
 			merged.MCPServers[name] = server
 			sources[name] = path
 		}

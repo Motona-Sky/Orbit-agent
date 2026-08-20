@@ -37,6 +37,9 @@ go.work.sum
 !.vscode/extensions.json
 !.vscode/launch.json
 
+# Jupyter generated checkpoints
+.ipynb_checkpoints/
+
 # ===== OS generated =====
 .DS_Store
 .DS_Store?
@@ -75,13 +78,10 @@ logs/
 *~
 
 # ===== Agent logs =====
-0*
 *agent_log.md
-*.md
+
 # ===== Local worktrees =====
 .worktrees/
 
 # ===== Visual brainstorming previews =====
 .superpowers/
-main
-ttest

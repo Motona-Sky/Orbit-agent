@@ -8,7 +8,11 @@ import (
 	"orbit/internal/utils"
 	"os"
 	"path/filepath"
+	"sync"
 )
+
+// userMemMu 保护 memorys.json 文件的读写操作，防止并发竞态
+var userMemMu sync.Mutex
 
 type UserMemory struct {
 	Num         int            `json:"num"`
@@ -23,17 +27,21 @@ var userMemPath = filepath.Join(
 )
 
 func AddUserMemorys(userMemory string) error {
+	userMemMu.Lock()
+	defer userMemMu.Unlock()
+
 	var u UserMemorys
 	// 读取已有文件
 	mem, err := os.ReadFile(userMemPath)
 	if err != nil && !os.IsNotExist(err) {
-		os.Remove(userMemPath)
-		os.Create(userMemPath)
+		return fmt.Errorf("read user memory: %w", err)
 	}
 
 	// 文件存在且不为空时，解析已有 JSON
 	if len(mem) > 0 {
-		_ = json.Unmarshal(mem, &u)
+		if err := json.Unmarshal(mem, &u); err != nil {
+			return fmt.Errorf("parse user memory: %w", err)
+		}
 	}
 
 	// 找出下一个编号
@@ -69,6 +77,9 @@ func AddUserMemorys(userMemory string) error {
 }
 
 func GetUserMemorys() (UserMemorys, error) {
+	userMemMu.Lock()
+	defer userMemMu.Unlock()
+
 	var u UserMemorys
 	mem, err := os.ReadFile(userMemPath)
 	if err != nil {
@@ -94,15 +105,22 @@ func GetUserMemorysPrompt() string {
 }
 
 func DelUserMemorys(num int) error {
-	userMemorys, err := GetUserMemorys()
+	userMemMu.Lock()
+	defer userMemMu.Unlock()
+
+	var u UserMemorys
+	mem, err := os.ReadFile(userMemPath)
 	if err != nil {
+		return err
+	}
+	if err := json.Unmarshal(mem, &u); err != nil {
 		return err
 	}
 
 	// 从切片中移除匹配的元素，并重新编号保持连续
 	var filtered UserMemorys
 	newNum := 1
-	for _, item := range userMemorys {
+	for _, item := range u {
 		if item.Num != num {
 			oldNum := item.Num
 			item.Num = newNum

@@ -11,7 +11,8 @@ type openAIResponsesText struct {
 }
 
 type openAIResponsesReasoning struct {
-	Effort string `json:"effort,omitempty"`
+	Effort  string `json:"effort,omitempty"`
+	Summary string `json:"summary,omitempty"`
 }
 
 type openAIResponsesTool struct {
@@ -124,7 +125,7 @@ func buildOpenAIResponseRequest(req GenReqJsonPvRequest, registeredTools []tools
 		Model:        req.Model,
 		Instructions: req.SystemPrompt,
 		Input:        buildOpenAIResponsesInput(req.UserInput, req.Memory, systemRole),
-		Stream:       true,
+		Stream:       req.Provider == "oauth:codex",
 		Text: openAIResponsesText{
 			Format: openAIResponsesTextFormat{Type: "text"},
 		},
@@ -144,7 +145,7 @@ func buildOpenAIResponseRequest(req GenReqJsonPvRequest, registeredTools []tools
 		request.TopP = &topP
 	}
 	if req.ThinkLevel != "" {
-		request.Reasoning = &openAIResponsesReasoning{Effort: req.ThinkLevel}
+		request.Reasoning = &openAIResponsesReasoning{Effort: req.ThinkLevel, Summary: "auto"}
 	}
 	if len(registeredTools) > 0 {
 		request.Tools = buildOpenAIResponsesTools(registeredTools)

@@ -16,17 +16,17 @@ func loadStyleConfigOrDefault() config.StyleConfig {
 }
 
 func (m model) mutedStyle() lipgloss.Style {
-	return lipgloss.NewStyle().Foreground(lipgloss.Color(m.styleConfig.Palette.Muted))
+	return m.styleMuted
 }
 
 func (m model) pureWhiteStyle() lipgloss.Style {
-	return lipgloss.NewStyle().Foreground(lipgloss.Color("#ffffff"))
+	return m.stylePureWhite
 }
 
 func (m model) accentStyle() lipgloss.Style {
-	return lipgloss.NewStyle().Foreground(lipgloss.Color(m.styleConfig.Palette.Accent)).Bold(true)
+	return m.styleAccent
 }
 
 func (m model) thinkingStyle() lipgloss.Style {
-	return m.mutedStyle()
+	return m.styleMuted
 }

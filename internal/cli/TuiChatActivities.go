@@ -20,7 +20,7 @@ func (m *model) recordActivity(event agentui.ActivityEvent) {
 		content:      event.Target,
 		activityKind: event.Kind,
 	})
-	m.activitiesExpanded = false
+	m.activitiesExpanded = true
 }
 
 func (m model) activityCountText() string {
@@ -69,7 +69,7 @@ func (m model) renderRuntimeActivityTree(width int) string {
 	childWidth := maxInt(1, width-lipgloss.Width(activityTreeBranch))
 	children := make([]string, 0, len(m.activities)+2)
 	if thinking := m.renderThinkingText(childWidth); thinking != "" {
-		children = append(children, thinking)
+		children = append(children, strings.Split(thinking, "\n")...)
 	}
 	if activities := m.renderActivityGroup(childWidth); activities != "" {
 		children = append(children, strings.Split(activities, "\n")...)
@@ -102,14 +102,7 @@ func (m model) handleActivityToggle() (bool, model) {
 }
 
 func (m *model) appendActivitySummary() {
-	if len(m.activities) == 0 {
-		m.activitiesExpanded = false
-		return
-	}
-	m.transcript = append(m.transcript, chatTranscriptEntry{
-		kind:    transcriptActivitySummary,
-		content: "› " + m.activityCountText(),
-	})
+	m.transcript = append(m.transcript, m.activities...)
 	m.activities = nil
 	m.activitiesExpanded = false
 }

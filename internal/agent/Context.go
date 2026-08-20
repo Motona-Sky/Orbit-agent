@@ -6,7 +6,6 @@ import (
 	"errors"
 	"fmt"
 	"orbit/internal/llm"
-	"orbit/internal/utils"
 	"strings"
 )
 
@@ -21,8 +20,20 @@ func GetConLength(provider string, usage map[string]any) float64 {
 	}
 	return 0
 }
-func CompressContext(ctx context.Context, messages []llm.MemoryMessage) ([]llm.MemoryMessage, error) {
+
+// CompressCredential 包含压缩请求所需的认证信息。
+type CompressCredential struct {
+	Auth       string // "codex" 或其他
+	Credential string // API Key 或 Access Token
+	AccountID  string
+	BaseUrl    string
+	Provider   string
+	Model      string
+}
+
+func CompressContext(ctx context.Context, messages []llm.MemoryMessage, cred CompressCredential) ([]llm.MemoryMessage, error) {
 	var newContext []llm.MemoryMessage
+	var toCompress []llm.MemoryMessage
 	var tmpContext []llm.MemoryMessage
 
 	for _, v := range messages {
@@ -41,20 +52,29 @@ func CompressContext(ctx context.Context, messages []llm.MemoryMessage) ([]llm.M
 				continue
 			}
 
-			// 没有工具调用，认为这是这一轮的最终回答。
-			comcon, err := requestSummary(ctx, tmpContext)
-			if err != nil {
-				return nil, err
-			}
-
-			newContext = append(newContext, llm.MemoryMessage{
-				Role:    "assistant",
-				Content: comcon,
-			})
-
-			// 当前轮次已经压缩完毕。
+			// 没有工具调用，认为这是这一轮的最终回答，收集待压缩消息。
+			toCompress = append(toCompress, tmpContext...)
 			tmpContext = nil
 		}
+	}
+
+	// 将所有已完成的轮次合并为一次摘要请求。
+	if len(toCompress) > 0 {
+		comcon, err := requestSummary(ctx, toCompress, cred)
+		if err != nil {
+			return nil, err
+		}
+		// 使用 user + assistant 消息对，保证角色交替规范。
+		newContext = append(newContext,
+			llm.MemoryMessage{
+				Role:    "user",
+				Content: "[Context Checkpoint] The following is a compressed summary of our previous conversation.",
+			},
+			llm.MemoryMessage{
+				Role:    "assistant",
+				Content: comcon,
+			},
+		)
 	}
 
 	// 保留没有完成的最后一轮对话。
@@ -66,14 +86,14 @@ func CompressContext(ctx context.Context, messages []llm.MemoryMessage) ([]llm.M
 }
 
 // requestSummary 序列化旧消息并请求 LLM 生成摘要。
-func requestSummary(ctx context.Context, old []llm.MemoryMessage) (string, error) {
+func requestSummary(ctx context.Context, old []llm.MemoryMessage, cred CompressCredential) (string, error) {
 	input, err := json.Marshal(old)
 	if err != nil {
 		return "", fmt.Errorf("marshal old messages: %w", err)
 	}
 	req := llm.GenReqJsonPvRequest{
-		Provider: utils.Provider,
-		Model:    utils.Model,
+		Provider: cred.Provider,
+		Model:    cred.Model,
 		SystemPrompt: `You are performing a context checkpoint compression.
 
 Create a concise handoff summary for the next LLM that will continue the task. Include:
@@ -95,11 +115,19 @@ Submit the summary as role: assistant. The original input remains role: user.
 	if err != nil {
 		return "", fmt.Errorf("gen compress req err: %w", err)
 	}
-	err, respJSON := llm.RequProvider(ctx, utils.ApiKey, utils.BaseUrl, utils.Provider, data)
-	if err != nil {
-		return "", err
+
+	var reqErr error
+	var respJSON string
+	if cred.Auth == "codex" {
+		reqErr, respJSON = llm.RequOuth(cred.Credential, cred.AccountID, cred.Provider, data)
+	} else {
+		reqErr, respJSON = llm.RequProvider(ctx, cred.Credential, cred.BaseUrl, cred.Provider, data)
 	}
-	_, assistantMemory, _, err := ParseResponse(utils.Provider, respJSON)
+	if reqErr != nil {
+		return "", reqErr
+	}
+
+	_, assistantMemory, _, err := ParseResponse(cred.Provider, respJSON)
 	if err != nil {
 		return "", err
 	}
@@ -108,9 +136,3 @@ Submit the summary as role: assistant. The original input remains role: user.
 	}
 	return assistantMemory[0].Content, nil
 }
-
-// func llmcompressContext(context []llm.MemoryMessage) ([]llm.MemoryMessage, error) {
-// 	var newContext []llm.MemoryMessage
-
-// 	return CompressContext(context)
-// }
