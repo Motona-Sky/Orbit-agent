@@ -8,6 +8,7 @@ import (
 	"orbit/internal/agentui"
 	"orbit/internal/billing"
 	"orbit/internal/debug"
+	"orbit/internal/hook"
 	"orbit/internal/llm"
 	"orbit/internal/memorys"
 	"orbit/internal/oauth"
@@ -41,6 +42,11 @@ const (
 
 // RunAgent 加载会话上下文并执行 Agent 循环，直至产生最终回复或遇到不可恢复的错误。
 func RunAgent(ctx context.Context, agentvalue RunAgentValue, ui *agentui.AgentUI) error {
+	// Register exec_command confirmation hook only in review mode
+	if utils.Mode == utils.ModeAsk {
+		hook.RegisterExecCommandAsk(ui.Ask)
+	}
+
 	var memory []llm.MemoryMessage
 	req := llm.GenReqJsonPvRequest{
 		Provider:     agentvalue.Provider,
@@ -290,10 +296,21 @@ func RunAgent(ctx context.Context, agentvalue RunAgentValue, ui *agentui.AgentUI
 				return err
 			}
 		}
-		toolResults, err := tools.RunTools(ctx, toolCalls)
-		if err != nil {
-			return fmt.Errorf("run tools err: %w", err)
+		// Guard exec_command tool calls with user confirmation
+		guard, guardErr := hook.GuardToolCalls(toolCalls)
+		if guardErr != nil {
+			return guardErr
 		}
+		var toolResults []tools.ToolResult
+		if len(guard.ApprovedCalls) > 0 {
+			var runErr error
+			toolResults, runErr = tools.RunTools(ctx, guard.ApprovedCalls)
+			if runErr != nil {
+				return fmt.Errorf("run tools err: %w", runErr)
+			}
+		}
+		// 合并被拒绝的结果
+		toolResults = append(toolResults, guard.DeniedResults...)
 		toolRoundSignature, err := makeToolRoundSignature(toolCalls, toolResults)
 		if err != nil {
 			return fmt.Errorf("build tool round signature: %w", err)

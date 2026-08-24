@@ -63,14 +63,14 @@ func RunTools(ctx context.Context, toolsValue []any) ([]ToolResult, error) {
 		case <-ctx.Done():
 			return nil, ctx.Err()
 		case result := <-toolJobChannel:
-			results[result.index] = result
+			results[result.Index] = result
 		}
 	}
 	return results, nil
 }
 
 type ToolResult struct {
-	index      int
+	Index      int
 	Role       string `json:"role"`
 	ToolCallID string `json:"tool_call_id"`
 	Content    string `json:"content"`
@@ -79,7 +79,7 @@ type ToolResult struct {
 // 内部函数，多线程调用
 func runtooljob(ctx context.Context, index int, tool ToolFunc, toolCallID string, function map[string]any, toolJobChannel chan<- ToolResult) {
 	result := ToolResult{
-		index:      index,
+		Index:      index,
 		Role:       "tool",
 		ToolCallID: toolCallID,
 	}

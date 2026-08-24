@@ -97,6 +97,11 @@ type ChatMessages struct {
 	MCPErrorSummary            string
 	MCPStartupError            string
 
+	ExecCommandConfirm  string
+	ExecCommandAllow    string
+	ExecCommandDeny     string
+	ExecCommandDenied   string
+
 	ContextUsage  string
 	TaskCompleted string
 	TaskCanceled  string

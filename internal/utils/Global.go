@@ -7,6 +7,12 @@ import (
 	"runtime"
 )
 
+// Permission mode constants
+const (
+	ModeAuto = "auto" // Full-access mode: commands execute directly without confirmation
+	ModeAsk  = "ask"  // Review mode: prompt the user for confirmation before executing commands
+)
+
 var (
 	ProviderConfig    = "openai:completions" //ProviderCongig.go
 	ConfigFolderPath  string
@@ -26,6 +32,7 @@ var (
 	ProejctConfigPath string
 	UserPath          string
 	OS                string
+	Mode              string = ModeAsk // Default to review mode
 )
 
 func GInit() {
