@@ -76,7 +76,11 @@ cd Orbit-agent
 go install 
 ```
 #### 编译可执行文件
+
+```bash
 go build -o orbit ./cmd/orbit
+
+```
 
 #### 添加系统变量
 
