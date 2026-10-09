@@ -97,6 +97,7 @@ func RunAgent(ctx context.Context, agentvalue RunAgentValue, ui *agentui.AgentUI
 	var previousToolRoundSignature string
 	var repeatedToolRoundCount int
 	SessionId := utils.SessionId
+	ctx = context.WithValue(ctx, subagentContextKey{}, newSubagentRuntime(agentvalue, credential, SessionId))
 	debug.Record("agent_start", map[string]any{
 		"provider":       agentvalue.Provider,
 		"model":          agentvalue.Model,

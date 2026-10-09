@@ -11,7 +11,14 @@ import (
 // 内部通过 GetEnabledTools() 拿到当前可执行的工具集合（按 mcpEnabled / disabledTools 过滤），
 // agent 主循环无需传开关参数 —— MCP 开关和工具禁用全部封装在 tools 包内。
 func RunTools(ctx context.Context, toolsValue []any) ([]ToolResult, error) {
-	enabled := GetEnabledTools()
+	return RunToolsWithRegistry(ctx, toolsValue, GetEnabledTools())
+}
+
+// RunToolsWithRegistry 只执行传入注册表中的工具；调用期间不得修改该注册表。
+func RunToolsWithRegistry(ctx context.Context, toolsValue []any, enabled map[string]ToolFunc) ([]ToolResult, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
 
 	type toolJob struct {
 		index      int

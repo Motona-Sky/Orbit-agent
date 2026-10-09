@@ -157,6 +157,17 @@ Orbit provides native MCP support. You can configure MCP servers in user-level `
 ### Skills Mechanism
 Place YAML or Markdown skill definitions in the `.orbit/skills/` directory. Orbit will automatically scan, load, and register them under `/skills`, enabling command-driven automation for common development workflows.
 
+### Subagent Tool
+The built-in `subagent` tool synchronously delegates read-only research or analysis. Its only required parameter is `task`:
+
+```json
+{"task": "Find the tool registration entrypoints in this project and report the relevant paths and implementation details."}
+```
+
+The subagent inherits the current model and system constraints but uses independent context. Only enabled local `read_file`, `ls`, and `Grep` tools are available; commands, file edits, and recursive delegation are not allowed. Parent conversation history is not shared, so include the necessary context and paths in the task. The final answer is returned as a normal tool result, and token usage is charged to the parent session.
+
+Each invocation allows up to 10 model requests, has a two-minute timeout, and limits each tool output and the final answer to 32 KiB. Canceling the parent cancels child requests; existing file reads and traversals may not stop immediately. The read-only restriction is not a filesystem sandbox.
+
 ---
 
 ## 🛠️ Architecture
