@@ -119,6 +119,47 @@ func TestRunToolsStillRejectsUnregisteredTool(t *testing.T) {
 	}
 }
 
+func TestRunToolsWithRegistryValidatesBatchBeforeExecution(t *testing.T) {
+	called := false
+	allowed := map[string]ToolFunc{
+		"allowed": {
+			Name: "allowed",
+			Function: func(context.Context, []any) (string, error) {
+				called = true
+				return "output", nil
+			},
+		},
+	}
+	_, err := RunToolsWithRegistry(context.Background(), []any{
+		testToolCall("allowed-call", "allowed"),
+		testToolCall("denied-call", "exec_command"),
+	}, allowed)
+	if err == nil || !strings.Contains(err.Error(), "is not registered") {
+		t.Fatalf("error = %v, want denied tool error", err)
+	}
+	if called {
+		t.Fatal("allowed tool executed before the entire batch was validated")
+	}
+}
+
+func TestRunToolsWithRegistryRejectsCanceledContextBeforeExecution(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	allowed := map[string]ToolFunc{
+		"allowed": {
+			Name: "allowed",
+			Function: func(context.Context, []any) (string, error) {
+				t.Error("tool executed with a canceled context")
+				return "", nil
+			},
+		},
+	}
+	_, err := RunToolsWithRegistry(ctx, []any{testToolCall("call", "allowed")}, allowed)
+	if !errors.Is(err, context.Canceled) {
+		t.Fatalf("error = %v, want context.Canceled", err)
+	}
+}
+
 func testToolCall(id, name string) map[string]any {
 	return map[string]any{
 		"id": id,
